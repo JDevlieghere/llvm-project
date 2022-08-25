@@ -36,7 +36,7 @@ public:
   /// more than one architecture or object.
   ObjectContainer(const lldb::ModuleSP &module_sp, const FileSpec *file,
                   lldb::offset_t file_offset, lldb::offset_t length,
-                  lldb::DataBufferSP &data_sp, lldb::offset_t data_offset)
+                  lldb::DataBufferSP data_sp, lldb::offset_t data_offset)
       : ModuleChild(module_sp),
         m_file(), // This file can be different than the module's file spec
         m_offset(file_offset), m_length(length) {
