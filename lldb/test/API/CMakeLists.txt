@@ -82,6 +82,11 @@ endif()
 if (NOT ${CMAKE_SYSTEM_NAME} MATCHES "Windows|Darwin")
   list(APPEND LLDB_TEST_COMMON_ARGS_VAR
     --env ARCHIVER=${CMAKE_AR} --env OBJCOPY=${CMAKE_OBJCOPY})
+else()
+  if (TARGET llvm-objcopy)
+    list(APPEND LLDB_TEST_COMMON_ARGS_VAR
+      --env OBJCOPY=${LLVM_TOOLS_BINARY_DIR}/llvm-objcopy${CMAKE_EXECUTABLE_SUFFIX})
+  endif()
 endif()
 
 if (NOT "${LLDB_LIT_TOOLS_DIR}" STREQUAL "")
