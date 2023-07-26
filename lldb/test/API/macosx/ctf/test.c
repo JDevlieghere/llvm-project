@@ -29,7 +29,12 @@ typedef struct MyStruct {
   void (*f)(int);
 } MyStructT;
 
+struct RecursiveStruct {
+  struct RecursiveStruct* next;
+};
+
 MyStructT foo;
+struct RecursiveStruct bar;
 
 void populate(MyInt i) {
   foo.n.i = i;
@@ -41,6 +46,8 @@ void populate(MyInt i) {
   foo.n.a[3] = 'd';
   foo.n.e = eOne;
   foo.f = NULL;
+
+  bar.next = &bar;
 }
 
 int main(int argc, char** argv) {
