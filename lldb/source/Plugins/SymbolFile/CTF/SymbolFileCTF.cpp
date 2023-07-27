@@ -642,11 +642,12 @@ SymbolFileCTF::ParseType(lldb::offset_t &offset, lldb::user_id_t uid) {
     return std::make_unique<CTFRecord>(static_cast<CTFType::Kind>(kind), uid,
                                        name, variable_length, size, fields);
   }
+  case TypeKind::eForward:
+    return std::make_unique<CTFForward>(uid, name, type);
   case TypeKind::eUnknown:
     return std::make_unique<CTFType>(static_cast<CTFType::Kind>(kind), uid,
                                      name);
   case TypeKind::eFloat:
-  case TypeKind::eForward:
   case TypeKind::eSlice:
     offset += (variable_length * sizeof(uint32_t));
     break;
