@@ -218,7 +218,6 @@ private:
     uint32_t name;
     uint32_t type;
     uint16_t offset;
-    uint16_t padding;
   };
 
   struct ctf_array_t {
@@ -271,6 +270,7 @@ private:
 
   static constexpr uint16_t g_ctf_magic = 0xcff1;
   static constexpr uint8_t g_ctf_version = 4;
+  static constexpr uint32_t g_ctf_field_treshold = 8192;
 };
 } // namespace lldb_private
 
