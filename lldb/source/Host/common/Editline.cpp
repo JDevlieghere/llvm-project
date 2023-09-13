@@ -101,6 +101,26 @@ bool IsOnlySpaces(const EditLineStringType &content) {
   return true;
 }
 
+// Naive ColumnWidth implementation that ignores ANSI escape codes.
+// FIXME: This should support UTF-8.
+static size_t ColumnWidth(llvm::StringRef str) {
+  size_t length = 0;
+  bool is_escape_code = false;
+  for (const char c : str) {
+    if (is_escape_code) {
+      if (c == 'm')
+        is_escape_code = false;
+      continue;
+    }
+    if (c == 0x1b) {
+      is_escape_code = true;
+      continue;
+    }
+    length++;
+  }
+  return length;
+}
+
 static int GetOperation(HistoryOperation op) {
   // The naming used by editline for the history operations is counter
   // intuitive to how it's used in LLDB's editline implementation.
@@ -118,21 +138,20 @@ static int GetOperation(HistoryOperation op) {
   //  - The H_FIRST returns the most recent entry in the history.
   //
   // The naming of the enum entries match the semantic meaning.
-  switch(op) {
-    case HistoryOperation::Oldest:
-      return H_LAST;
-    case HistoryOperation::Older:
-      return H_NEXT;
-    case HistoryOperation::Current:
-      return H_CURR;
-    case HistoryOperation::Newer:
-      return H_PREV;
-    case HistoryOperation::Newest:
-      return H_FIRST;
+  switch (op) {
+  case HistoryOperation::Oldest:
+    return H_LAST;
+  case HistoryOperation::Older:
+    return H_NEXT;
+  case HistoryOperation::Current:
+    return H_CURR;
+  case HistoryOperation::Newer:
+    return H_PREV;
+  case HistoryOperation::Newest:
+    return H_FIRST;
   }
   llvm_unreachable("Fully covered switch!");
 }
-
 
 EditLineStringType CombineLines(const std::vector<EditLineStringType> &lines) {
   EditLineStringStreamType combined_stream;
@@ -309,8 +328,8 @@ protected:
   /// Path to the history file.
   std::string m_path;
 };
-}
-}
+} // namespace line_editor
+} // namespace lldb_private
 
 // Editline private methods
 
@@ -353,7 +372,7 @@ void Editline::SetCurrentLine(int line_index) {
   m_current_prompt = PromptForIndex(line_index);
 }
 
-int Editline::GetPromptWidth() { return (int)PromptForIndex(0).length(); }
+int Editline::GetPromptWidth() { return (int)ColumnWidth(PromptForIndex(0)); }
 
 bool Editline::IsEmacs() {
   const char *editor;
@@ -428,9 +447,10 @@ void Editline::DisplayInput(int firstIndex) {
   const char *unfaint = m_color_prompts ? ANSI_UNFAINT : "";
 
   for (int index = firstIndex; index < line_count; index++) {
-    fprintf(m_output_file, "%s"
-                           "%s"
-                           "%s" EditLineStringFormatSpec " ",
+    fprintf(m_output_file,
+            "%s"
+            "%s"
+            "%s" EditLineStringFormatSpec " ",
             faint, PromptForIndex(index).c_str(), unfaint,
             m_input_lines[index].c_str());
     if (index < line_count - 1)
@@ -545,9 +565,10 @@ int Editline::GetCharacter(EditLineGetCharType *c) {
   // (will only be requested if colors are supported)
   if (m_needs_prompt_repaint) {
     MoveCursor(CursorLocation::EditingCursor, CursorLocation::EditingPrompt);
-    fprintf(m_output_file, "%s"
-                           "%s"
-                           "%s",
+    fprintf(m_output_file,
+            "%s"
+            "%s"
+            "%s",
             ANSI_FAINT, Prompt(), ANSI_UNFAINT);
     MoveCursor(CursorLocation::EditingPrompt, CursorLocation::EditingCursor);
     m_needs_prompt_repaint = false;
@@ -1017,7 +1038,8 @@ unsigned char Editline::TabCommand(int ch) {
       to_add.push_back(' ');
       el_deletestr(m_editline, request.GetCursorArgumentPrefix().size());
       el_insertstr(m_editline, to_add.c_str());
-      // Clear all the autosuggestion parts if the only single space can be completed.
+      // Clear all the autosuggestion parts if the only single space can be
+      // completed.
       if (to_add == " ")
         return CC_REDISPLAY;
       return CC_REFRESH;
@@ -1146,7 +1168,7 @@ void Editline::ConfigureEditor(bool multiline) {
 
   if (m_history_sp && m_history_sp->IsValid()) {
     if (!m_history_sp->Load()) {
-        fputs("Could not load history file\n.", m_output_file);
+      fputs("Could not load history file\n.", m_output_file);
     }
     el_wset(m_editline, EL_HIST, history, m_history_sp->GetHistoryPtr());
   }

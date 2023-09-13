@@ -44,3 +44,12 @@ class EditlineTest(PExpectTest):
             )
 
         self.quit()
+
+    @skipIfAsan
+    @skipIfEditlineSupportMissing
+    def test_ansi_prompt(self):
+        """Test that ANSI escape codes don't break the prompt"""
+        self.launch(use_colors=True, timeout=1)
+        self.child.send('settings set prompt "\\x1b[31m(lldb)\\x1b[0m "\n')
+        # Check that the cursor position is correct. It must be in position 8 (\x1b[8G).
+        self.child.expect(re.escape("\x1b[31m(lldb)\x1b[0m \x1b[0m\x1b[8G"))
