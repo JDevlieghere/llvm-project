@@ -10,6 +10,7 @@
 #define LLDB_API_SBPLATFORM_H
 
 #include "lldb/API/SBDefines.h"
+#include "lldb/API/SBProcess.h"
 
 #include <functional>
 
@@ -19,6 +20,7 @@ struct PlatformShellCommand;
 namespace lldb {
 
 class SBLaunchInfo;
+class SBAttachInfo;
 
 class LLDB_API SBPlatformConnectOptions {
 public:
@@ -148,6 +150,9 @@ public:
   SBError Run(SBPlatformShellCommand &shell_command);
 
   SBError Launch(SBLaunchInfo &launch_info);
+
+  SBProcess Attach(SBAttachInfo &attach_info, const SBDebugger &debugger,
+                   SBTarget &target, SBError &error);
 
   SBError Kill(const lldb::pid_t pid);
 
