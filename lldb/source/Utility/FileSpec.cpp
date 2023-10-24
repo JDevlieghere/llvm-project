@@ -68,7 +68,8 @@ void Denormalize(llvm::SmallVectorImpl<char> &path, FileSpec::Style style) {
 FileSpec::FileSpec() : m_style(GetNativeStyle()) {}
 
 // Default constructor that can take an optional full path to a file on disk.
-FileSpec::FileSpec(llvm::StringRef path, Style style) : m_style(style) {
+FileSpec::FileSpec(llvm::StringRef path, Style style, const Checksum &checksum)
+    : m_checksum(checksum), m_style(style) {
   SetFile(path, style);
 }
 
