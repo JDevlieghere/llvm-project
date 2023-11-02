@@ -8,11 +8,6 @@
 
 #include "SymbolFileDWARF.h"
 
-#include "llvm/DebugInfo/DWARF/DWARFDebugLoc.h"
-#include "llvm/Support/Casting.h"
-#include "llvm/Support/Format.h"
-#include "llvm/Support/Threading.h"
-
 #include "lldb/Core/Module.h"
 #include "lldb/Core/ModuleList.h"
 #include "lldb/Core/ModuleSpec.h"
@@ -27,16 +22,10 @@
 #include "lldb/Utility/StreamString.h"
 #include "lldb/Utility/StructuredData.h"
 #include "lldb/Utility/Timer.h"
-
 #include "Plugins/ExpressionParser/Clang/ClangModulesDeclVendor.h"
 #include "Plugins/Language/CPlusPlus/CPlusPlusLanguage.h"
-
 #include "lldb/Host/FileSystem.h"
-#include "lldb/Host/Host.h"
-
-#include "lldb/Interpreter/OptionValueFileSpecList.h"
 #include "lldb/Interpreter/OptionValueProperties.h"
-
 #include "Plugins/ExpressionParser/Clang/ClangUtil.h"
 #include "Plugins/SymbolFile/DWARF/DWARFDebugInfoEntry.h"
 #include "Plugins/TypeSystem/Clang/TypeSystemClang.h"
@@ -52,7 +41,6 @@
 #include "lldb/Symbol/TypeMap.h"
 #include "lldb/Symbol/TypeSystem.h"
 #include "lldb/Symbol/VariableList.h"
-
 #include "lldb/Target/Language.h"
 #include "lldb/Target/Target.h"
 
@@ -74,17 +62,17 @@
 #include "SymbolFileDWARFDebugMap.h"
 #include "SymbolFileDWARFDwo.h"
 
+#include "llvm/DebugInfo/DWARF/DWARFDebugLoc.h"
+#include "llvm/Support/Casting.h"
+#include "llvm/Support/Threading.h"
 #include "llvm/DebugInfo/DWARF/DWARFContext.h"
 #include "llvm/DebugInfo/DWARF/DWARFDebugAbbrev.h"
-#include "llvm/Support/FileSystem.h"
 #include "llvm/Support/FormatVariadic.h"
 
 #include <algorithm>
 #include <map>
 #include <memory>
 #include <optional>
-
-#include <cctype>
 #include <cstring>
 
 //#define ENABLE_DEBUG_PRINTF // COMMENT OUT THIS LINE PRIOR TO CHECKIN
