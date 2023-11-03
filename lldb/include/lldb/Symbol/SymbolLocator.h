@@ -6,8 +6,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLDB_SYMBOL_SYMBOLFILELOCATOR_H
-#define LLDB_SYMBOL_SYMBOLFILELOCATOR_H
+#ifndef LLDB_SYMBOL_SYMBOLLOCATOR_H
+#define LLDB_SYMBOL_SYMBOLLOCATOR_H
 
 #include "lldb/Core/PluginInterface.h"
 
