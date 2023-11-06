@@ -71,6 +71,7 @@ FileSpec::FileSpec() : m_style(GetNativeStyle()) {}
 FileSpec::FileSpec(llvm::StringRef path, Style style, const Checksum &checksum)
     : m_checksum(checksum), m_style(style) {
   SetFile(path, style);
+  m_checksum = checksum;
 }
 
 FileSpec::FileSpec(llvm::StringRef path, const llvm::Triple &triple)
