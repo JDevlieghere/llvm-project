@@ -9,11 +9,13 @@
 #ifndef LLDB_CORE_SOURCEMANAGER_H
 #define LLDB_CORE_SOURCEMANAGER_H
 
+#include "lldb/Utility/Checksum.h"
 #include "lldb/Utility/FileSpec.h"
 #include "lldb/lldb-defines.h"
 #include "lldb/lldb-forward.h"
 
 #include "llvm/Support/Chrono.h"
+#include "llvm/Support/MD5.h"
 #include "llvm/Support/RWMutex.h"
 
 #include <cstddef>
@@ -68,6 +70,8 @@ public:
 
     llvm::sys::TimePoint<> GetTimestamp() const { return m_mod_time; }
 
+    const Checksum &GetChecksum() const { return m_checksum; }
+
   protected:
     /// Set file and update modification time.
     void SetFileSpec(FileSpec file_spec);
@@ -82,6 +86,8 @@ public:
 
     // Keep the modification time that this file data is valid for
     llvm::sys::TimePoint<> m_mod_time;
+
+    Checksum m_checksum;
 
     // If the target uses path remappings, be sure to clear our notion of a
     // source file if the path modification ID changes
