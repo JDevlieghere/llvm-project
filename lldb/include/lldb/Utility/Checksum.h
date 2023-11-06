@@ -24,6 +24,8 @@ public:
   bool operator==(const Checksum &checksum) const;
   bool operator!=(const Checksum &checksum) const;
 
+  std::string digest() const;
+
 private:
   void SetMD5(llvm::MD5::MD5Result);
 

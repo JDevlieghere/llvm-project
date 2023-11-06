@@ -7,6 +7,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "lldb/Utility/Checksum.h"
+#include "llvm/ADT/SmallString.h"
 
 using namespace lldb_private;
 
@@ -35,6 +36,10 @@ bool Checksum::operator==(const Checksum &checksum) const {
 bool Checksum::operator!=(const Checksum &checksum) const {
   return !std::equal(m_checksum.begin(), m_checksum.end(),
                      checksum.m_checksum.begin());
+}
+
+std::string Checksum::digest() const {
+  return std::string(m_checksum.digest().str());
 }
 
 llvm::MD5::MD5Result Checksum::sentinel = {0, 0, 0, 0, 0, 0, 0, 0,

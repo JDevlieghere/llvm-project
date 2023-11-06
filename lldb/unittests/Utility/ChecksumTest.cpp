@@ -33,6 +33,18 @@ TEST(ChecksumTest, TestConstructor) {
   EXPECT_EQ(checksum3, Checksum(hash1));
 }
 
+TEST(ChecksumTest, TestCopyConstructor) {
+  Checksum checksum1;
+  EXPECT_FALSE(static_cast<bool>(checksum1));
+  EXPECT_EQ(checksum1, Checksum());
+
+  Checksum checksum2 = checksum1;
+  EXPECT_EQ(checksum2, checksum1);
+
+  Checksum checksum3(checksum1);
+  EXPECT_EQ(checksum3, checksum1);
+}
+
 TEST(ChecksumTest, TestMD5) {
   Checksum checksum1(hash1);
   EXPECT_TRUE(static_cast<bool>(checksum1));
