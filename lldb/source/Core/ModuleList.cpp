@@ -105,6 +105,10 @@ bool ModuleListProperties::SetEnableExternalLookup(bool new_value) {
 }
 
 SymbolDownload ModuleListProperties::GetSymbolDownload() const {
+  // Backward compatibility alias.
+  if (GetPropertyAtIndexAs<bool>(ePropertyEnableBackgroundLookup, false))
+    return eSymbolDownloadBackground;
+
   const uint32_t idx = ePropertyDownload;
   return GetPropertyAtIndexAs<lldb::SymbolDownload>(
       idx, static_cast<lldb::SymbolDownload>(
