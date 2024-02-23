@@ -365,16 +365,34 @@ bool Debugger::SetREPLLanguage(lldb::LanguageType repl_lang) {
 
 uint64_t Debugger::GetTerminalWidth() const {
   const uint32_t idx = ePropertyTerminalWidth;
-  return GetPropertyAtIndexAs<int64_t>(
+  return GetPropertyAtIndexAs<uint64_t>(
       idx, g_debugger_properties[idx].default_uint_value);
 }
 
 bool Debugger::SetTerminalWidth(uint64_t term_width) {
+  const uint32_t idx = ePropertyTerminalWidth;
+  const bool success = SetPropertyAtIndex(idx, term_width);
+
   if (auto handler_sp = m_io_handler_stack.Top())
     handler_sp->TerminalSizeChanged();
 
-  const uint32_t idx = ePropertyTerminalWidth;
-  return SetPropertyAtIndex(idx, term_width);
+  return success;
+}
+
+uint64_t Debugger::GetTerminalHeight() const {
+  const uint32_t idx = ePropertyTerminalHeight;
+  return GetPropertyAtIndexAs<uint64_t>(
+      idx, g_debugger_properties[idx].default_uint_value);
+}
+
+bool Debugger::SetTerminalHeight(uint64_t term_height) {
+  const uint32_t idx = ePropertyTerminalHeight;
+  const bool success = SetPropertyAtIndex(idx, term_height);
+
+  if (auto handler_sp = m_io_handler_stack.Top())
+    handler_sp->TerminalSizeChanged();
+
+  return success;
 }
 
 bool Debugger::GetUseExternalEditor() const {
