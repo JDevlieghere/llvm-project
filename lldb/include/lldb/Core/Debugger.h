@@ -19,6 +19,7 @@
 #include "lldb/Core/FormatEntity.h"
 #include "lldb/Core/IOHandler.h"
 #include "lldb/Core/SourceManager.h"
+#include "lldb/Core/StatusBar.h"
 #include "lldb/Core/UserSettingsController.h"
 #include "lldb/Host/HostThread.h"
 #include "lldb/Host/StreamFile.h"
@@ -738,6 +739,9 @@ protected:
 
   uint32_t m_interrupt_requested = 0; ///< Tracks interrupt requests
   std::mutex m_interrupt_mutex;
+
+public:
+  StatusBar m_status_bar;
 
   // Events for m_sync_broadcaster
   enum {

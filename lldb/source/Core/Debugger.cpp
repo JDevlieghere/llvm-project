@@ -392,6 +392,8 @@ bool Debugger::SetTerminalHeight(uint64_t term_height) {
   if (auto handler_sp = m_io_handler_stack.Top())
     handler_sp->TerminalSizeChanged();
 
+  m_status_bar.Refresh();
+
   return success;
 }
 
@@ -864,7 +866,7 @@ Debugger::Debugger(lldb::LogOutputCallback log_callback, void *baton)
       m_sync_broadcaster(nullptr, "lldb.debugger.sync"),
       m_broadcaster(m_broadcaster_manager_sp,
                     GetStaticBroadcasterClass().AsCString()),
-      m_forward_listener_sp(), m_clear_once() {
+      m_forward_listener_sp(), m_clear_once(), m_status_bar(*this) {
   // Initialize the debugger properties as early as possible as other parts of
   // LLDB will start querying them during construction.
   m_collection_sp->Initialize(g_debugger_properties);
@@ -933,6 +935,9 @@ Debugger::Debugger(lldb::LogOutputCallback log_callback, void *baton)
           return llvm::Error::success();
         });
   }
+
+  m_status_bar.Enable();
+  m_status_bar.Refresh();
 
 #if defined(_WIN32) && defined(ENABLE_VIRTUAL_TERMINAL_PROCESSING)
   // Enabling use of ANSI color codes because LLDB is using them to highlight
@@ -2062,9 +2067,7 @@ void Debugger::HandleProgressEvent(const lldb::EventSP &event_sp) {
   output->Printf("\r");
 
   if (data->GetCompleted() == data->GetTotal()) {
-    // Clear the current line.
-    output->Printf("\x1B[2K");
-    output->Flush();
+    m_status_bar.SetStatus("");
     return;
   }
 
@@ -2081,24 +2084,7 @@ void Debugger::HandleProgressEvent(const lldb::EventSP &event_sp) {
   if (message.size() + ellipsis >= term_width)
     message = message.substr(0, term_width - ellipsis);
 
-  const bool use_color = GetUseColor();
-  llvm::StringRef ansi_prefix = GetShowProgressAnsiPrefix();
-  if (!ansi_prefix.empty())
-    output->Printf(
-        "%s", ansi::FormatAnsiTerminalCodes(ansi_prefix, use_color).c_str());
-
-  output->Printf("%s...", message.c_str());
-
-  llvm::StringRef ansi_suffix = GetShowProgressAnsiSuffix();
-  if (!ansi_suffix.empty())
-    output->Printf(
-        "%s", ansi::FormatAnsiTerminalCodes(ansi_suffix, use_color).c_str());
-
-  // Clear until the end of the line.
-  output->Printf("\x1B[K\r");
-
-  // Flush the output.
-  output->Flush();
+  m_status_bar.SetStatus(message);
 }
 
 void Debugger::HandleDiagnosticEvent(const lldb::EventSP &event_sp) {

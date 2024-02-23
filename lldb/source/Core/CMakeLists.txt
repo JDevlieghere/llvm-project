@@ -53,6 +53,7 @@ add_lldb_library(lldbCore
   Section.cpp
   SourceLocationSpec.cpp
   SourceManager.cpp
+  StatusBar.cpp
   StreamAsynchronousIO.cpp
   ThreadedCommunication.cpp
   UserSettingsController.cpp
