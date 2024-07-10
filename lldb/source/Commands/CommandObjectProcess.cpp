@@ -34,6 +34,7 @@
 #include "lldb/Utility/Args.h"
 #include "lldb/Utility/ScriptedMetadata.h"
 #include "lldb/Utility/State.h"
+#include "../Plugins/StackProvider/Python/StackProviderPython.h"
 
 #include "llvm/ADT/ScopeExit.h"
 
@@ -927,6 +928,41 @@ public:
     return nullptr;
   }
 };
+
+
+// CommandObjectProcessTest
+#pragma mark CommandObjectProcessTest
+
+class CommandObjectProcessTest : public CommandObjectParsed {
+public:
+  CommandObjectProcessTest(CommandInterpreter &interpreter)
+      : CommandObjectParsed(interpreter, "process test",
+                            "remove me.",
+                            "process test",
+                            eCommandRequiresProcess | eCommandTryTargetAPILock |
+                                eCommandProcessMustBeLaunched) {}
+
+  ~CommandObjectProcessTest() override = default;
+
+protected:
+  void DoExecute(Args &command, CommandReturnObject &result) override {
+    Process *process = m_exe_ctx.GetProcessPtr();
+    if (process == nullptr) {
+      result.AppendError("no process to test");
+      return;
+    }
+
+    StackProviderPython spp;
+    llvm::Expected<std::string> s = spp.RunPythonCode(m_exe_ctx,"import traceback; traceback.format_stack()");
+    if (!s) {
+      result.AppendError(llvm::toString(s.takeError()));
+      return;
+    }
+    result.AppendMessage(*s);
+    result.SetStatus(eReturnStatusSuccessFinishResult);
+  }
+};
+
 
 // CommandObjectProcessLoad
 #define LLDB_OPTIONS_process_load
@@ -1853,6 +1889,8 @@ CommandObjectMultiwordProcess::CommandObjectMultiwordProcess(
                  CommandObjectSP(new CommandObjectProcessKill(interpreter)));
   LoadSubCommand("plugin",
                  CommandObjectSP(new CommandObjectProcessPlugin(interpreter)));
+  LoadSubCommand("test",
+                 CommandObjectSP(new CommandObjectProcessTest(interpreter)));
   LoadSubCommand("save-core", CommandObjectSP(new CommandObjectProcessSaveCore(
                                   interpreter)));
   LoadSubCommand(
