@@ -747,7 +747,7 @@ protected:
       const bool show_locations = false;
       bp_sp->GetDescription(&output_stream, lldb::eDescriptionLevelInitial,
                             show_locations);
-      if (&target == &GetDummyTarget())
+      if (&target == &GetTarget(/*dummy=*/true))
         output_stream.Printf("Breakpoint set in dummy target, will get copied "
                              "into future targets.\n");
       else {

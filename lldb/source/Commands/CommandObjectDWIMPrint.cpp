@@ -75,9 +75,8 @@ void CommandObjectDWIMPrint::DoExecute(StringRef command,
 
   auto verbosity = GetDebugger().GetDWIMPrintVerbosity();
 
-  Target *target_ptr = m_exe_ctx.GetTargetPtr();
   // Fallback to the dummy target, which can allow for expression evaluation.
-  Target &target = target_ptr ? *target_ptr : GetDummyTarget();
+  Target &target = GetTarget(/*dummy=*/true);
 
   EvaluateExpressionOptions eval_options =
       m_expr_options.GetEvaluateExpressionOptions(target, m_varobj_options);
@@ -112,7 +111,7 @@ void CommandObjectDWIMPrint::DoExecute(StringRef command,
     // - End with zero or more whitespace characters.
     const std::regex swift_class_regex("^<\\S+: 0x[[:xdigit:]]{5,}>\\s*$");
 
-    if (GetDebugger().GetShowDontUsePoHint() && target_ptr &&
+    if (GetDebugger().GetShowDontUsePoHint() &&
         (language == lldb::eLanguageTypeSwift ||
          language == lldb::eLanguageTypeObjC) &&
         std::regex_match(output.data(), swift_class_regex)) {

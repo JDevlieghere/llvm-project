@@ -374,7 +374,8 @@ protected:
   // target with entities that will be copied over to new targets.
   Target &GetSelectedOrDummyTarget(bool prefer_dummy = false);
   Target &GetSelectedTarget();
-  Target &GetDummyTarget();
+
+  Target &GetTarget(bool dummy = false);
 
   // If a command needs to use the "current" thread, use this call. Command
   // objects will have an ExecutionContext to use, and that may or may not have
