@@ -62,7 +62,12 @@ public:
     /// An artificial stack frame (e.g. a synthesized result of inferring
     /// missing tail call frames from a backtrace) with limited support for
     /// local variables.
-    Artificial
+    Artificial,
+
+    /// A synthetic stack frame (e.g. a synthesized result that has no
+    /// corresponding counterpart in the inferior,
+    /// with no CFA, registers of variables.
+    Synthetic,
   };
 
   /// Construct a StackFrame object without supplying a RegisterContextSP.
@@ -406,6 +411,8 @@ public:
   /// inferring missing tail call frames from a backtrace). Artificial frames
   /// may have limited support for inspecting variables.
   bool IsArtificial() const;
+
+  bool IsSynthetic() const;
 
   /// Query whether this frame should be hidden from backtraces. Frame
   /// recognizers can customize this behavior and hide distracting

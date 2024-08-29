@@ -299,6 +299,11 @@ Block *StackFrame::GetFrameBlock() {
 const SymbolContext &
 StackFrame::GetSymbolContext(SymbolContextItem resolve_scope) {
   std::lock_guard<std::recursive_mutex> guard(m_mutex);
+
+  // We know what we know.
+  if (IsSynthetic())
+    return m_sc;
+
   // Copy our internal symbol context into "sc".
   if ((m_flags.Get() & resolve_scope) != resolve_scope) {
     uint32_t resolved = 0;
@@ -1196,6 +1201,10 @@ bool StackFrame::IsHistorical() const {
 
 bool StackFrame::IsArtificial() const {
   return m_stack_frame_kind == StackFrame::Kind::Artificial;
+}
+
+bool StackFrame::IsSynthetic() const {
+  return m_stack_frame_kind == StackFrame::Kind::Synthetic;
 }
 
 bool StackFrame::IsHidden() {

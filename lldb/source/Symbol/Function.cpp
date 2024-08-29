@@ -262,7 +262,7 @@ Function::Function(CompileUnit *comp_unit, lldb::user_id_t func_uid,
       m_type(type), m_mangled(mangled), m_block(func_uid), m_range(range),
       m_frame_base(), m_flags(), m_prologue_byte_size(0) {
   m_block.SetParentScope(this);
-  assert(comp_unit != nullptr);
+  // assert(comp_unit != nullptr);
 }
 
 Function::~Function() = default;

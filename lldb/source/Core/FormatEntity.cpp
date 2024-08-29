@@ -1839,11 +1839,8 @@ bool FormatEntity::Format(const Entry &entry, Stream &s,
 
   case Entry::Type::LineEntryFile:
     if (sc && sc->line_entry.IsValid()) {
-      Module *module = sc->module_sp.get();
-      if (module) {
-        if (DumpFile(s, sc->line_entry.GetFile(), (FileKind)entry.number))
-          return true;
-      }
+      if (DumpFile(s, sc->line_entry.GetFile(), (FileKind)entry.number))
+        return true;
     }
     return false;
 

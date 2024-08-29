@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "lldb/Target/StackFrame.h"
+#include "Plugins/StackProvider/Python/StackProviderPython.h"
 
 namespace lldb_private {
 
@@ -94,16 +95,17 @@ public:
                    bool show_unique = false, bool show_hidden = false,
                    const char *frame_marker = nullptr);
 
+  void SynthesizeFrames(const std::vector<SymbolContext>& frames);
 protected:
   friend class Thread;
   friend class ScriptedThread;
 
   bool SetFrameAtIndex(uint32_t idx, lldb::StackFrameSP &frame_sp);
 
-  /// Realizes frames up to (and including) end_idx (which can be greater than  
-  /// the actual number of frames.)  
+  /// Realizes frames up to (and including) end_idx (which can be greater than
+  /// the actual number of frames.)
   /// Returns true if the function was interrupted, false otherwise.
-  bool GetFramesUpTo(uint32_t end_idx, 
+  bool GetFramesUpTo(uint32_t end_idx,
       InterruptionControl allow_interrupt = AllowInterruption);
 
   void GetOnlyConcreteFramesUpTo(uint32_t end_idx, Unwind &unwinder);

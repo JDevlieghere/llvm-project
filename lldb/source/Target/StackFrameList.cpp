@@ -29,7 +29,7 @@
 
 #include <memory>
 
-//#define DEBUG_STACK_FRAMES 1
+// #define DEBUG_STACK_FRAMES 1
 
 using namespace lldb;
 using namespace lldb_private;
@@ -85,7 +85,7 @@ void StackFrameList::ResetCurrentInlinedDepth() {
     return;
 
   std::lock_guard<std::recursive_mutex> guard(m_mutex);
-  
+
   GetFramesUpTo(0, DoNotAllowInterruption);
   if (m_frames.empty())
     return;
@@ -510,11 +510,11 @@ bool StackFrameList::GetFramesUpTo(uint32_t end_idx,
     } else {
       // Check for interruption when building the frames.
       // Do the check in idx > 0 so that we'll always create a 0th frame.
-      if (allow_interrupt 
-          && INTERRUPT_REQUESTED(dbg, "Interrupted having fetched {0} frames",
-                                 m_frames.size())) {
-          was_interrupted = true;
-          break;
+      if (allow_interrupt &&
+          INTERRUPT_REQUESTED(dbg, "Interrupted having fetched {0} frames",
+                              m_frames.size())) {
+        was_interrupted = true;
+        break;
       }
 
       const bool success =
@@ -640,7 +640,7 @@ uint32_t StackFrameList::GetNumFrames(bool can_create) {
 
   if (can_create) {
     // Don't allow interrupt or we might not return the correct count
-    GetFramesUpTo(UINT32_MAX, DoNotAllowInterruption); 
+    GetFramesUpTo(UINT32_MAX, DoNotAllowInterruption);
   }
   return GetVisibleStackFrameIndex(m_frames.size());
 }
@@ -831,8 +831,8 @@ void StackFrameList::SelectMostRelevantFrame() {
   }
 }
 
-uint32_t StackFrameList::GetSelectedFrameIndex(
-    SelectMostRelevant select_most_relevant) {
+uint32_t
+StackFrameList::GetSelectedFrameIndex(SelectMostRelevant select_most_relevant) {
   std::lock_guard<std::recursive_mutex> guard(m_mutex);
   if (!m_selected_frame_idx && select_most_relevant)
     SelectMostRelevantFrame();
@@ -975,7 +975,6 @@ size_t StackFrameList::GetStatus(Stream &strm, uint32_t first_frame,
             m_thread.GetID(), num_frames_displayed))
       break;
 
-
     if (!frame_sp->GetStatus(strm, show_frame_info,
                              num_frames_with_source > (first_frame - frame_idx),
                              show_unique, marker))
@@ -985,4 +984,23 @@ size_t StackFrameList::GetStatus(Stream &strm, uint32_t first_frame,
 
   strm.IndentLess();
   return num_frames_displayed;
+}
+
+void StackFrameList::SynthesizeFrames(
+    const std::vector<SymbolContext> &frames) {
+  if (m_frames.empty())
+    return;
+  for (const SymbolContext &ctx : frames) {
+    const uint32_t frame_idx = m_frames.size();
+    const uint32_t concrete_frame_idx = frame_idx;
+    const addr_t cfa = LLDB_INVALID_ADDRESS;
+    const bool cfa_is_valid = false;
+    const bool behaves_like_zeroth_frame = false;
+    const addr_t pc = 0x1234;
+    auto synth_frame = std::make_shared<StackFrame>(
+        m_thread.shared_from_this(), frame_idx, concrete_frame_idx, cfa,
+        cfa_is_valid, pc, StackFrame::Kind::Artificial,
+        behaves_like_zeroth_frame, &ctx);
+    m_frames.push_back(synth_frame);
+  }
 }

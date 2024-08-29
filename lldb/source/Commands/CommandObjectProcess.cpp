@@ -34,6 +34,7 @@
 #include "lldb/Utility/Args.h"
 #include "lldb/Utility/ScriptedMetadata.h"
 #include "lldb/Utility/State.h"
+#include "../Plugins/StackProvider/Python/StackProviderPython.h"
 
 #include "llvm/ADT/ScopeExit.h"
 
@@ -925,6 +926,67 @@ public:
     return nullptr;
   }
 };
+
+
+// CommandObjectProcessTest
+#pragma mark CommandObjectProcessTest
+
+class CommandObjectProcessTest : public CommandObjectParsed {
+public:
+  CommandObjectProcessTest(CommandInterpreter &interpreter)
+      : CommandObjectParsed(interpreter, "process test",
+                            "remove me.",
+                            "process test",
+                            eCommandRequiresProcess | eCommandTryTargetAPILock |
+                                eCommandProcessMustBeLaunched) {}
+
+  ~CommandObjectProcessTest() override = default;
+
+protected:
+  void DoExecute(Args &command, CommandReturnObject &result) override {
+    Process *process = m_exe_ctx.GetProcessPtr();
+    if (process == nullptr) {
+      result.AppendError("no process to test");
+      return;
+    }
+
+    ThreadSP thread_sp = m_exe_ctx.GetThreadSP();
+    if (!thread_sp) {
+      result.AppendError("no thread to test");
+      return;
+    }
+
+
+    StackProviderPython spp;
+    llvm::Expected<std::vector<SymbolContext>> tb = spp.GetSyntheticFrames(m_exe_ctx);
+    if (!tb) {
+      result.AppendError(llvm::toString(tb.takeError()));
+      return;
+    }
+
+#if 0
+    StackFrameListSP sfl = thread->GetStackFrameList();
+    sfl->SynthesizeFrames(*tb);
+#else
+  // for (const SymbolContext &ctx : *tb) {
+    const uint32_t frame_idx = 0;
+    const uint32_t concrete_frame_idx = frame_idx;
+    const addr_t cfa = LLDB_INVALID_ADDRESS;
+    const bool cfa_is_valid = false;
+    const bool behaves_like_zeroth_frame = false;
+    const addr_t pc = 0x1234;
+    auto synth_frame = std::make_shared<StackFrame>(
+        thread_sp, frame_idx, concrete_frame_idx, cfa,
+        cfa_is_valid, pc, StackFrame::Kind::Synthetic,
+        behaves_like_zeroth_frame, &(*tb)[0]);
+    synth_frame->GetStatus(result.GetOutputStream(), true, true, true, "*");
+  // }
+#endif
+
+    result.SetStatus(eReturnStatusSuccessFinishResult);
+  }
+};
+
 
 // CommandObjectProcessLoad
 #define LLDB_OPTIONS_process_load
@@ -1852,6 +1914,8 @@ CommandObjectMultiwordProcess::CommandObjectMultiwordProcess(
                  CommandObjectSP(new CommandObjectProcessKill(interpreter)));
   LoadSubCommand("plugin",
                  CommandObjectSP(new CommandObjectProcessPlugin(interpreter)));
+  LoadSubCommand("test",
+                 CommandObjectSP(new CommandObjectProcessTest(interpreter)));
   LoadSubCommand("save-core", CommandObjectSP(new CommandObjectProcessSaveCore(
                                   interpreter)));
   LoadSubCommand(
