@@ -46,9 +46,16 @@ StreamFile::StreamFile(const char *path, File::OpenOptions options,
 
 StreamFile::~StreamFile() = default;
 
+SynchronizedStreamFile::~SynchronizedStreamFile() = default;
+
 void StreamFile::Flush() { m_file_sp->Flush(); }
 
 size_t StreamFile::WriteImpl(const void *s, size_t length) {
   m_file_sp->Write(s, length);
   return length;
+}
+
+size_t SynchronizedStreamFile::WriteImpl(const void *s, size_t length) {
+  std::lock_guard<std::mutex> guard(m_mutex);
+  return StreamFile::WriteImpl(s, length);
 }

@@ -52,6 +52,37 @@ private:
   const StreamFile &operator=(const StreamFile &) = delete;
 };
 
+class SynchronizedStreamFile : public StreamFile {
+public:
+  SynchronizedStreamFile(uint32_t flags, uint32_t addr_size,
+                         lldb::ByteOrder byte_order)
+      : StreamFile(flags, addr_size, byte_order) {}
+
+  SynchronizedStreamFile(int fd, bool transfer_ownership)
+      : StreamFile(fd, transfer_ownership) {}
+
+  SynchronizedStreamFile(
+      const char *path, File::OpenOptions options,
+      uint32_t permissions = lldb::eFilePermissionsFileDefault)
+      : StreamFile(path, options, permissions) {}
+
+  SynchronizedStreamFile(FILE *fh, bool transfer_ownership)
+      : StreamFile(fh, transfer_ownership) {}
+
+  SynchronizedStreamFile(std::shared_ptr<File> file) : StreamFile(file) {}
+
+  ~SynchronizedStreamFile() override;
+
+protected:
+  size_t WriteImpl(const void *s, size_t length) override;
+  std::mutex m_mutex;
+
+private:
+  SynchronizedStreamFile(const SynchronizedStreamFile &) = delete;
+  const SynchronizedStreamFile &
+  operator=(const SynchronizedStreamFile &) = delete;
+};
+
 } // namespace lldb_private
 
 #endif // LLDB_HOST_STREAMFILE_H

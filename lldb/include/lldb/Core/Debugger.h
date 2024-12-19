@@ -693,8 +693,8 @@ protected:
 
   // these should never be NULL
   lldb::FileSP m_input_file_sp;
-  lldb::StreamFileSP m_output_stream_sp;
-  lldb::StreamFileSP m_error_stream_sp;
+  lldb::SynchronizedStreamFileSP m_output_stream_sp;
+  lldb::SynchronizedStreamFileSP m_error_stream_sp;
 
   /// Used for shadowing the input file when capturing a reproducer.
   repro::DataRecorder *m_input_recorder;

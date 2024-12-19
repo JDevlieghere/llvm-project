@@ -875,8 +875,10 @@ Debugger::Debugger(lldb::LogOutputCallback log_callback, void *baton)
     : UserID(g_unique_id++),
       Properties(std::make_shared<OptionValueProperties>()),
       m_input_file_sp(std::make_shared<NativeFile>(stdin, false)),
-      m_output_stream_sp(std::make_shared<StreamFile>(stdout, false)),
-      m_error_stream_sp(std::make_shared<StreamFile>(stderr, false)),
+      m_output_stream_sp(
+          std::make_shared<SynchronizedStreamFile>(stdout, false)),
+      m_error_stream_sp(
+          std::make_shared<SynchronizedStreamFile>(stderr, false)),
       m_input_recorder(nullptr),
       m_broadcaster_manager_sp(BroadcasterManager::MakeBroadcasterManager()),
       m_terminal_state(), m_target_list(*this), m_platform_list(),
@@ -1084,12 +1086,12 @@ void Debugger::SetInputFile(FileSP file_sp) {
 
 void Debugger::SetOutputFile(FileSP file_sp) {
   assert(file_sp && file_sp->IsValid());
-  m_output_stream_sp = std::make_shared<StreamFile>(file_sp);
+  m_output_stream_sp = std::make_shared<SynchronizedStreamFile>(file_sp);
 }
 
 void Debugger::SetErrorFile(FileSP file_sp) {
   assert(file_sp && file_sp->IsValid());
-  m_error_stream_sp = std::make_shared<StreamFile>(file_sp);
+  m_error_stream_sp = std::make_shared<SynchronizedStreamFile>(file_sp);
 }
 
 void Debugger::SaveInputTerminalState() {
@@ -1253,7 +1255,7 @@ void Debugger::AdoptTopIOHandlerFilesIfInvalid(FileSP &in, StreamFileSP &out,
       out = GetOutputStreamSP();
     // If there is nothing, use stdout
     if (!out)
-      out = std::make_shared<StreamFile>(stdout, false);
+      out = std::make_shared<SynchronizedStreamFile>(stdout, false);
   }
   // If no STDERR has been set, then set it appropriately
   if (!err || !err->GetFile().IsValid()) {
@@ -1263,7 +1265,7 @@ void Debugger::AdoptTopIOHandlerFilesIfInvalid(FileSP &in, StreamFileSP &out,
       err = GetErrorStreamSP();
     // If there is nothing, use stderr
     if (!err)
-      err = std::make_shared<StreamFile>(stderr, false);
+      err = std::make_shared<SynchronizedStreamFile>(stderr, false);
   }
 }
 
@@ -2072,6 +2074,7 @@ void Debugger::StopEventHandlerThread() {
 lldb::thread_result_t Debugger::IOHandlerThread() {
   RunIOHandlers();
   StopEventHandlerThread();
+  StopProgressThread();
   return {};
 }
 
