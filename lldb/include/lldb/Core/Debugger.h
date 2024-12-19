@@ -735,6 +735,8 @@ protected:
     std::string message;
   };
   llvm::SmallVector<ProgressReport, 8> m_progress_reports;
+  std::optional<std::chrono::time_point<std::chrono::steady_clock>>
+      m_last_progress_report;
   /// @}
 
   llvm::StringMap<std::weak_ptr<LogHandler>> m_stream_handlers;

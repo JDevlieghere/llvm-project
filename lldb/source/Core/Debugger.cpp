@@ -2076,11 +2076,15 @@ lldb::thread_result_t Debugger::IOHandlerThread() {
 }
 
 void Debugger::HandleProgressEvent(const lldb::EventSP &event_sp) {
+  using namespace std::chrono_literals;
+  static constexpr std::chrono::milliseconds g_refresh_rate = 200ms;
+
   auto *data = ProgressEventData::GetEventDataFromEvent(event_sp.get());
   if (!data)
     return;
 
-  // Make a local copy of the incoming progress report.
+  // Make a local copy of the incoming progress report, which might get modified
+  // below.
   ProgressReport progress_report{
       data->GetID(), data->IsFinite()
                          ? llvm::formatv("[{0}/{1}] {2}", data->GetCompleted(),
@@ -2116,15 +2120,23 @@ void Debugger::HandleProgressEvent(const lldb::EventSP &event_sp) {
 
   StreamSP output = GetAsyncOutputStream();
 
-  // Print over previous line, if any.
-  output->Printf("\r");
-
   // Clear the current line if there's no more progress to report.
   if (m_progress_reports.empty()) {
+    m_last_progress_report.reset();
+    output->Printf("\r");
     output->Printf("\x1B[2K");
     output->Flush();
     return;
   }
+
+  // Check if we want to print the current progress report.
+  auto now = std::chrono::steady_clock::now();
+  if (m_last_progress_report) {
+    if (now - *m_last_progress_report < g_refresh_rate)
+      return;
+  }
+
+  m_last_progress_report.emplace(now);
 
   // Trim the progress message if it exceeds the window's width and print it.
   std::string message = progress_report.message;
@@ -2132,6 +2144,9 @@ void Debugger::HandleProgressEvent(const lldb::EventSP &event_sp) {
   const uint32_t ellipsis = 3;
   if (message.size() + ellipsis >= term_width)
     message.resize(term_width - ellipsis);
+
+  // Print over previous line, if any.
+  output->Printf("\r");
 
   const bool use_color = GetUseColor();
   llvm::StringRef ansi_prefix = GetShowProgressAnsiPrefix();
