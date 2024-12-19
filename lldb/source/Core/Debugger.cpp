@@ -1198,6 +1198,7 @@ bool Debugger::CheckTopIOHandlerTypes(IOHandler::Type top_type,
 }
 
 void Debugger::PrintAsync(const char *s, size_t len, bool is_stdout) {
+  std::lock_guard<std::mutex> guard(m_async_mutex);
   bool printed = m_io_handler_stack.PrintAsync(s, len, is_stdout);
   if (!printed) {
     lldb::StreamFileSP stream =
@@ -1323,11 +1324,13 @@ bool Debugger::PopIOHandler(const IOHandlerSP &pop_reader_sp) {
 }
 
 StreamSP Debugger::GetAsyncOutputStream() {
-  return std::make_shared<StreamAsynchronousIO>(*this, true, GetUseColor());
+  return std::make_shared<StreamAsynchronousIO>(*this,
+                                                StreamAsynchronousIO::eSTDOUT);
 }
 
 StreamSP Debugger::GetAsyncErrorStream() {
-  return std::make_shared<StreamAsynchronousIO>(*this, false, GetUseColor());
+  return std::make_shared<StreamAsynchronousIO>(*this,
+                                                StreamAsynchronousIO::eSTDERR);
 }
 
 void Debugger::RequestInterrupt() {

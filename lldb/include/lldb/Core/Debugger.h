@@ -749,6 +749,7 @@ protected:
   std::condition_variable m_progress_cv;
   /// @}
 
+  std::mutex m_async_mutex;
   llvm::StringMap<std::weak_ptr<LogHandler>> m_stream_handlers;
   std::shared_ptr<CallbackLogHandler> m_callback_handler_sp;
   const std::string m_instance_name;

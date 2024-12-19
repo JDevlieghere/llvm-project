@@ -20,7 +20,12 @@ class Debugger;
 
 class StreamAsynchronousIO : public Stream {
 public:
-  StreamAsynchronousIO(Debugger &debugger, bool for_stdout, bool colors);
+  enum StreamType {
+    eSTDOUT,
+    eSTDERR,
+  };
+
+  StreamAsynchronousIO(Debugger &debugger, StreamType stream_type);
 
   ~StreamAsynchronousIO() override;
 
@@ -32,7 +37,7 @@ protected:
 private:
   Debugger &m_debugger;
   std::string m_data;
-  bool m_for_stdout;
+  StreamType m_stream_type;
 };
 
 } // namespace lldb_private
