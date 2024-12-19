@@ -595,6 +595,12 @@ public:
   /// Manually stop the debugger's default event handler.
   void StopEventHandlerThread();
 
+  /// Progress reporting thread.
+  /// @{
+  bool StartProgressThread();
+  void StopProgressThread();
+  /// @}
+
   /// Force flushing the process's pending stdout and stderr to the debugger's
   /// asynchronous stdout and stderr streams.
   void FlushProcessOutput(Process &process, bool flush_stdout,
@@ -676,6 +682,8 @@ protected:
 
   lldb::thread_result_t DefaultEventHandler();
 
+  lldb::thread_result_t ProgressThread();
+
   void HandleBreakpointEvent(const lldb::EventSP &event_sp);
 
   void HandleProcessEvent(const lldb::EventSP &event_sp);
@@ -735,8 +743,10 @@ protected:
     std::string message;
   };
   llvm::SmallVector<ProgressReport, 8> m_progress_reports;
-  std::optional<std::chrono::time_point<std::chrono::steady_clock>>
-      m_last_progress_report;
+  HostThread m_progress_thread;
+  bool m_progress_thread_exit = false;
+  std::mutex m_progress_mutex;
+  std::condition_variable m_progress_cv;
   /// @}
 
   llvm::StringMap<std::weak_ptr<LogHandler>> m_stream_handlers;

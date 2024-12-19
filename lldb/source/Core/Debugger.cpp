@@ -989,6 +989,7 @@ void Debugger::Clear() {
     ClearIOHandlers();
     StopIOHandlerThread();
     StopEventHandlerThread();
+    StopProgressThread();
     m_listener_sp->Clear();
     for (TargetSP target_sp : m_target_list.Targets()) {
       if (target_sp) {
@@ -2069,6 +2070,134 @@ void Debugger::StopEventHandlerThread() {
   }
 }
 
+lldb::thread_result_t Debugger::ProgressThread() {
+  using namespace std::chrono_literals;
+  static constexpr const std::chrono::milliseconds g_immediate_refresh_rate = 0ms;
+  static constexpr const std::chrono::milliseconds g_refresh_rate = 100ms;
+  static constexpr const std::chrono::milliseconds g_idle_refresh_rate = 10000ms;
+
+  bool exit = false;
+  std::optional<ProgressReport> progress_report;
+  std::chrono::milliseconds refresh_rate = g_refresh_rate;
+
+  while (!exit) {
+    std::unique_lock<std::mutex> lock(m_progress_mutex);
+    if (!m_progress_cv.wait_for(lock, refresh_rate,
+                                [&]() { return m_progress_thread_exit; })) {
+      // We hit the timeout. First check if we're asked to exit.
+      if (m_progress_thread_exit)
+        exit = true;
+
+      // If we're not currently showing a progress report and there's no new
+      // progress report, reduce the refresh rate until we receive more data.
+      if (!progress_report && m_progress_reports.empty()) {
+        refresh_rate = g_idle_refresh_rate;
+        continue;
+      }
+
+      // We're showing progress so use the normal refresh rate.
+      refresh_rate = g_refresh_rate;
+
+      // Decide whether we actually are going to show the progress. This
+      // decision can change between iterations so we  have to check every time.
+      if (!GetShowProgress())
+        continue;
+
+      // Determine whether the current output file is an interactive terminal
+      // with color support. We assume that if we support ANSI escape codes we
+      // support vt100 escape codes.
+      File &file = GetOutputFile();
+      if (!file.GetIsInteractive() || !file.GetIsTerminalWithColors())
+        continue;
+
+      StreamSP output = GetAsyncOutputStream();
+
+      // Clear the current line if there's no more progress to report.
+      if (m_progress_reports.empty()) {
+        m_progress_reports.clear();
+        output->Printf("\r");
+        output->Printf("\x1B[2K");
+        output->Flush();
+        continue;
+      }
+
+      assert(!m_progress_reports.empty());
+      progress_report.emplace(m_progress_reports.back());
+
+      // Trim the progress message if it exceeds the window's width and print
+      // it.
+      std::string message = progress_report->message;
+      const uint32_t term_width = GetTerminalWidth();
+      const uint32_t ellipsis = 3;
+      if (message.size() + ellipsis >= term_width)
+        message.resize(term_width - ellipsis);
+
+      // Print over previous line, if any.
+      output->Printf("\r");
+
+      const bool use_color = GetUseColor();
+      llvm::StringRef ansi_prefix = GetShowProgressAnsiPrefix();
+      if (!ansi_prefix.empty())
+        output->Printf(
+            "%s",
+            ansi::FormatAnsiTerminalCodes(ansi_prefix, use_color).c_str());
+
+      output->Printf("%s...", message.c_str());
+
+      llvm::StringRef ansi_suffix = GetShowProgressAnsiSuffix();
+      if (!ansi_suffix.empty())
+        output->Printf(
+            "%s",
+            ansi::FormatAnsiTerminalCodes(ansi_suffix, use_color).c_str());
+
+      // Clear until the end of the line.
+      output->Printf("\x1B[K\r");
+
+      // Flush the output.
+      output->Flush();
+    } else {
+      // First check if we're asked to exit.
+      if (m_progress_thread_exit)
+        exit = true;
+
+      // We are woken up by an event. Set the refresh rate. If we are currently
+      // showing a progress report, don't flicker and update at the regular
+      // cadence. If we are not showing a progress event, show it immediately.
+      refresh_rate =
+          progress_report ? g_refresh_rate : g_immediate_refresh_rate;
+    }
+  }
+
+  return {};
+}
+
+bool Debugger::StartProgressThread() {
+  if (!m_progress_thread.IsJoinable()) {
+    m_progress_thread_exit = false;
+    llvm::Expected<HostThread> progress_thread = ThreadLauncher::LaunchThread(
+        "lldb.debugger.progress", [this] { return ProgressThread(); });
+
+    if (progress_thread) {
+      m_progress_thread = *progress_thread;
+    } else {
+      LLDB_LOG_ERROR(GetLog(LLDBLog::Host), progress_thread.takeError(),
+                     "failed to launch host thread: {0}");
+    }
+  }
+  return m_progress_thread.IsJoinable();
+}
+
+void Debugger::StopProgressThread() {
+  if (m_progress_thread.IsJoinable()) {
+    {
+      std::lock_guard<std::mutex> guard(m_progress_mutex);
+      m_progress_thread_exit = true;
+    }
+    m_progress_cv.notify_one();
+    m_progress_thread.Join(nullptr);
+  }
+}
+
 lldb::thread_result_t Debugger::IOHandlerThread() {
   RunIOHandlers();
   StopEventHandlerThread();
@@ -2076,9 +2205,6 @@ lldb::thread_result_t Debugger::IOHandlerThread() {
 }
 
 void Debugger::HandleProgressEvent(const lldb::EventSP &event_sp) {
-  using namespace std::chrono_literals;
-  static constexpr std::chrono::milliseconds g_refresh_rate = 200ms;
-
   auto *data = ProgressEventData::GetEventDataFromEvent(event_sp.get());
   if (!data)
     return;
@@ -2091,6 +2217,8 @@ void Debugger::HandleProgressEvent(const lldb::EventSP &event_sp) {
                                          data->GetTotal(), data->GetMessage())
                                .str()
                          : data->GetMessage()};
+
+  std::lock_guard<std::mutex> guard(m_progress_mutex);
 
   // Do some bookkeeping regardless of whether we're going to display
   // progress reports.
@@ -2106,66 +2234,8 @@ void Debugger::HandleProgressEvent(const lldb::EventSP &event_sp) {
     m_progress_reports.push_back(progress_report);
   }
 
-  // Decide whether we actually are going to show the progress. This decision
-  // can change between iterations so we  have to check every time.
-  if (!GetShowProgress())
-    return;
-
-  // Determine whether the current output file is an interactive terminal with
-  // color support. We assume that if we support ANSI escape codes we support
-  // vt100 escape codes.
-  File &file = GetOutputFile();
-  if (!file.GetIsInteractive() || !file.GetIsTerminalWithColors())
-    return;
-
-  StreamSP output = GetAsyncOutputStream();
-
-  // Clear the current line if there's no more progress to report.
-  if (m_progress_reports.empty()) {
-    m_last_progress_report.reset();
-    output->Printf("\r");
-    output->Printf("\x1B[2K");
-    output->Flush();
-    return;
-  }
-
-  // Check if we want to print the current progress report.
-  auto now = std::chrono::steady_clock::now();
-  if (m_last_progress_report) {
-    if (now - *m_last_progress_report < g_refresh_rate)
-      return;
-  }
-
-  m_last_progress_report.emplace(now);
-
-  // Trim the progress message if it exceeds the window's width and print it.
-  std::string message = progress_report.message;
-  const uint32_t term_width = GetTerminalWidth();
-  const uint32_t ellipsis = 3;
-  if (message.size() + ellipsis >= term_width)
-    message.resize(term_width - ellipsis);
-
-  // Print over previous line, if any.
-  output->Printf("\r");
-
-  const bool use_color = GetUseColor();
-  llvm::StringRef ansi_prefix = GetShowProgressAnsiPrefix();
-  if (!ansi_prefix.empty())
-    output->Printf(
-        "%s", ansi::FormatAnsiTerminalCodes(ansi_prefix, use_color).c_str());
-
-  output->Printf("%s...", message.c_str());
-
-  llvm::StringRef ansi_suffix = GetShowProgressAnsiSuffix();
-  if (!ansi_suffix.empty())
-    output->Printf(
-        "%s", ansi::FormatAnsiTerminalCodes(ansi_suffix, use_color).c_str());
-
-  // Clear until the end of the line.
-  output->Printf("\x1B[K\r");
-
-  // Flush the output.
-  output->Flush();
+  // Wake up the progress thread if it's idle.
+  m_progress_cv.notify_one();
 }
 
 void Debugger::HandleDiagnosticEvent(const lldb::EventSP &event_sp) {

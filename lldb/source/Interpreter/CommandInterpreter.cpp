@@ -3447,8 +3447,10 @@ CommandInterpreterRunResult CommandInterpreter::RunCommandInterpreter(
   m_debugger.RunIOHandlerAsync(GetIOHandler(force_create, &options));
   m_result = CommandInterpreterRunResult();
 
-  if (options.GetAutoHandleEvents())
+  if (options.GetAutoHandleEvents()) {
     m_debugger.StartEventHandlerThread();
+    m_debugger.StartProgressThread();
+  }
 
   if (options.GetSpawnThread()) {
     m_debugger.StartIOHandlerThread();
@@ -3461,8 +3463,10 @@ CommandInterpreterRunResult CommandInterpreter::RunCommandInterpreter(
     m_debugger.RunIOHandlers();
     m_debugger.SetIOHandlerThread(old_io_handler_thread);
 
-    if (options.GetAutoHandleEvents())
+    if (options.GetAutoHandleEvents()) {
       m_debugger.StopEventHandlerThread();
+      m_debugger.StopProgressThread();
+    }
   }
 
   return m_result;
