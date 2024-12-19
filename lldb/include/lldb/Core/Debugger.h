@@ -728,7 +728,14 @@ protected:
   IOHandlerStack m_io_handler_stack;
   std::recursive_mutex m_io_handler_synchronous_mutex;
 
-  std::optional<uint64_t> m_current_event_id;
+  /// Bookkeeping for command line progress reporting.
+  /// @{
+  struct ProgressReport {
+    uint64_t id;
+    std::string message;
+  };
+  llvm::SmallVector<ProgressReport, 8> m_progress_reports;
+  /// @}
 
   llvm::StringMap<std::weak_ptr<LogHandler>> m_stream_handlers;
   std::shared_ptr<CallbackLogHandler> m_callback_handler_sp;

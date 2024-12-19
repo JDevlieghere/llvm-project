@@ -2080,31 +2080,30 @@ void Debugger::HandleProgressEvent(const lldb::EventSP &event_sp) {
   if (!data)
     return;
 
-  // Do some bookkeeping for the current event, regardless of whether we're
-  // going to show the progress.
-  const uint64_t id = data->GetID();
-  if (m_current_event_id) {
-    Log *log = GetLog(LLDBLog::Events);
-    if (log && log->GetVerbose()) {
-      StreamString log_stream;
-      log_stream.AsRawOstream()
-          << static_cast<void *>(this) << " Debugger(" << GetID()
-          << ")::HandleProgressEvent( m_current_event_id = "
-          << *m_current_event_id << ", data = { ";
-      data->Dump(&log_stream);
-      log_stream << " } )";
-      log->PutString(log_stream.GetString());
-    }
-    if (id != *m_current_event_id)
-      return;
+  // Make a local copy of the incoming progress report.
+  ProgressReport progress_report{
+      data->GetID(), data->IsFinite()
+                         ? llvm::formatv("[{0}/{1}] {2}", data->GetCompleted(),
+                                         data->GetTotal(), data->GetMessage())
+                               .str()
+                         : data->GetMessage()};
+
+  // Do some bookkeeping regardless of whether we're going to display
+  // progress reports.
+  auto it = std::find_if(
+      m_progress_reports.begin(), m_progress_reports.end(),
+      [&](const auto &report) { return report.id == progress_report.id; });
+  if (it != m_progress_reports.end()) {
     if (data->GetCompleted() == data->GetTotal())
-      m_current_event_id.reset();
+      m_progress_reports.erase(it);
+    else
+      *it = progress_report;
   } else {
-    m_current_event_id = id;
+    m_progress_reports.push_back(progress_report);
   }
 
   // Decide whether we actually are going to show the progress. This decision
-  // can change between iterations so check it inside the loop.
+  // can change between iterations so we  have to check every time.
   if (!GetShowProgress())
     return;
 
@@ -2120,21 +2119,15 @@ void Debugger::HandleProgressEvent(const lldb::EventSP &event_sp) {
   // Print over previous line, if any.
   output->Printf("\r");
 
-  if (data->GetCompleted() == data->GetTotal()) {
-    // Clear the current line.
+  // Clear the current line if there's no more progress to report.
+  if (m_progress_reports.empty()) {
     output->Printf("\x1B[2K");
     output->Flush();
     return;
   }
 
   // Trim the progress message if it exceeds the window's width and print it.
-  std::string message = data->GetMessage();
-  if (data->IsFinite())
-    message = llvm::formatv("[{0}/{1}] {2}", data->GetCompleted(),
-                            data->GetTotal(), message)
-                  .str();
-
-  // Trim the progress message if it exceeds the window's width and print it.
+  std::string message = progress_report.message;
   const uint32_t term_width = GetTerminalWidth();
   const uint32_t ellipsis = 3;
   if (message.size() + ellipsis >= term_width)
