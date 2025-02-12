@@ -13,9 +13,11 @@
 #include "lldb/Utility/Stream.h"
 #include "lldb/lldb-defines.h"
 #include "lldb/lldb-enumerations.h"
+#include "lldb/lldb-forward.h"
 
 #include <cstdint>
 #include <cstdio>
+#include <memory>
 
 namespace lldb_private {
 
@@ -50,6 +52,50 @@ protected:
 private:
   StreamFile(const StreamFile &) = delete;
   const StreamFile &operator=(const StreamFile &) = delete;
+};
+
+class LockableStreamFile;
+class LockedStreamFile : public StreamFile {
+public:
+  ~LockedStreamFile() { Flush(); }
+
+private:
+  LockedStreamFile(std::shared_ptr<File> file, std::recursive_mutex &mutex)
+      : StreamFile(file), m_guard(mutex) {}
+
+  friend class LockableStreamFile;
+
+  std::lock_guard<std::recursive_mutex> m_guard;
+};
+
+class LockableStreamFile {
+public:
+  LockableStreamFile(std::shared_ptr<StreamFile> stream_file_sp)
+      : m_file_sp(stream_file_sp->GetFileSP()) {}
+  LockableStreamFile(StreamFile &stream_file)
+      : m_file_sp(stream_file.GetFileSP()) {}
+  LockableStreamFile(FILE *fh, bool transfer_ownership)
+      : m_file_sp(std::make_shared<NativeFile>(fh, transfer_ownership)) {}
+  LockableStreamFile(std::shared_ptr<File> file_sp) : m_file_sp(file_sp) {}
+
+  LockedStreamFile Lock() { return LockedStreamFile(m_file_sp, m_mutex); }
+
+  /// Unsafe accessors to get the underlying File without a lock. Exists for
+  /// legacy reasons.
+  /// @{
+  File &GetUnlockedFile() { return *m_file_sp; }
+  std::shared_ptr<File> GetUnlockedFileSP() { return m_file_sp; }
+  /// @}
+
+  std::recursive_mutex &GetMutex() { return m_mutex; }
+
+protected:
+  std::shared_ptr<File> m_file_sp;
+  std::recursive_mutex m_mutex;
+
+private:
+  LockableStreamFile(const LockableStreamFile &) = delete;
+  const LockableStreamFile &operator=(const LockableStreamFile &) = delete;
 };
 
 } // namespace lldb_private

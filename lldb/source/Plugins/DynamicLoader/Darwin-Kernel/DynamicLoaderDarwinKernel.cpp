@@ -15,6 +15,7 @@
 #include "lldb/Core/PluginManager.h"
 #include "lldb/Core/Progress.h"
 #include "lldb/Core/Section.h"
+#include "lldb/Host/StreamFile.h"
 #include "lldb/Interpreter/OptionValueProperties.h"
 #include "lldb/Symbol/ObjectFile.h"
 #include "lldb/Target/OperatingSystem.h"
@@ -29,6 +30,7 @@
 #include "lldb/Utility/LLDBLog.h"
 #include "lldb/Utility/Log.h"
 #include "lldb/Utility/State.h"
+#include "lldb/lldb-forward.h"
 
 #include "DynamicLoaderDarwinKernel.h"
 
@@ -1193,7 +1195,7 @@ bool DynamicLoaderDarwinKernel::ReadKextSummaryHeader() {
           m_kext_summary_header.version = data.GetU32(&offset);
           if (m_kext_summary_header.version > 128) {
             lldb::StreamSP s =
-                m_process->GetTarget().GetDebugger().GetOutputStreamSP();
+                m_process->GetTarget().GetDebugger().GetAsyncOutputStream();
             s->Printf("WARNING: Unable to read kext summary header, got "
                       "improbable version number %u\n",
                       m_kext_summary_header.version);
@@ -1208,7 +1210,7 @@ bool DynamicLoaderDarwinKernel::ReadKextSummaryHeader() {
               // If we get an improbably large entry_size, we're probably
               // getting bad memory.
               lldb::StreamSP s =
-                  m_process->GetTarget().GetDebugger().GetOutputStreamSP();
+                  m_process->GetTarget().GetDebugger().GetAsyncOutputStream();
               s->Printf("WARNING: Unable to read kext summary header, got "
                         "improbable entry_size %u\n",
                         m_kext_summary_header.entry_size);
@@ -1226,7 +1228,7 @@ bool DynamicLoaderDarwinKernel::ReadKextSummaryHeader() {
             // If we get an improbably large number of kexts, we're probably
             // getting bad memory.
             lldb::StreamSP s =
-                m_process->GetTarget().GetDebugger().GetOutputStreamSP();
+                m_process->GetTarget().GetDebugger().GetAsyncOutputStream();
             s->Printf("WARNING: Unable to read kext summary header, got "
                       "improbable number of kexts %u\n",
                       m_kext_summary_header.entry_count);
@@ -1330,18 +1332,25 @@ bool DynamicLoaderDarwinKernel::ParseKextSummaries(
       number_of_old_kexts_being_removed == 0)
     return true;
 
-  lldb::StreamSP s = m_process->GetTarget().GetDebugger().GetOutputStreamSP();
+  lldb::LockableStreamFileSP output_sp =
+      m_process->GetTarget().GetDebugger().GetOutputStreamSP();
   if (load_kexts) {
+    LockedStreamFile locked_stream =
+        m_process->GetTarget().GetDebugger().GetOutputStreamSP()->Lock();
     if (number_of_new_kexts_being_added > 0 &&
         number_of_old_kexts_being_removed > 0) {
-      s->Printf("Loading %d kext modules and unloading %d kext modules ",
-                number_of_new_kexts_being_added,
-                number_of_old_kexts_being_removed);
+      LockedStreamFile locked_stream = output_sp->Lock();
+      locked_stream.Printf(
+          "Loading %d kext modules and unloading %d kext modules ",
+          number_of_new_kexts_being_added, number_of_old_kexts_being_removed);
     } else if (number_of_new_kexts_being_added > 0) {
-      s->Printf("Loading %d kext modules ", number_of_new_kexts_being_added);
+      LockedStreamFile locked_stream = output_sp->Lock();
+      locked_stream.Printf("Loading %d kext modules ",
+                           number_of_new_kexts_being_added);
     } else if (number_of_old_kexts_being_removed > 0) {
-      s->Printf("Unloading %d kext modules ",
-                number_of_old_kexts_being_removed);
+      LockedStreamFile locked_stream = output_sp->Lock();
+      locked_stream.Printf("Unloading %d kext modules ",
+                           number_of_old_kexts_being_removed);
     }
   }
 
@@ -1396,6 +1405,7 @@ bool DynamicLoaderDarwinKernel::ParseKextSummaries(
   if (number_of_old_kexts_being_removed > 0) {
     ModuleList loaded_module_list;
     const uint32_t num_of_old_kexts = m_known_kexts.size();
+    LockedStreamFile locked_stream = output_sp->Lock();
     for (uint32_t old_kext = 0; old_kext < num_of_old_kexts; old_kext++) {
       ModuleList unloaded_module_list;
       if (to_be_removed[old_kext]) {
@@ -1405,7 +1415,7 @@ bool DynamicLoaderDarwinKernel::ParseKextSummaries(
           if (image_info.GetModule()) {
             unloaded_module_list.AppendIfNeeded(image_info.GetModule());
           }
-          s->Printf(".");
+          locked_stream.Printf(".");
           image_info.Clear();
           // should pull it out of the KextImageInfos vector but that would
           // mutate the list and invalidate the to_be_removed bool vector;
@@ -1417,11 +1427,12 @@ bool DynamicLoaderDarwinKernel::ParseKextSummaries(
   }
 
   if (load_kexts) {
-    s->Printf(" done.\n");
+    LockedStreamFile locked_stream = output_sp->Lock();
+    locked_stream.Printf(" done.\n");
     if (kexts_failed_to_load.size() > 0 && number_of_new_kexts_being_added > 0) {
-      s->Printf("Failed to load %d of %d kexts:\n",
-                (int)kexts_failed_to_load.size(),
-                number_of_new_kexts_being_added);
+      locked_stream.Printf("Failed to load %d of %d kexts:\n",
+                           (int)kexts_failed_to_load.size(),
+                           number_of_new_kexts_being_added);
       // print a sorted list of <kext-name, uuid> kexts which failed to load
       unsigned longest_name = 0;
       std::sort(kexts_failed_to_load.begin(), kexts_failed_to_load.end());
@@ -1433,7 +1444,8 @@ bool DynamicLoaderDarwinKernel::ParseKextSummaries(
         std::string uuid;
         if (ku.second.IsValid())
           uuid = ku.second.GetAsString();
-        s->Printf(" %-*s %s\n", longest_name, ku.first.c_str(), uuid.c_str());
+        locked_stream.Printf(" %-*s %s\n", longest_name, ku.first.c_str(),
+                             uuid.c_str());
       }
     }
   }

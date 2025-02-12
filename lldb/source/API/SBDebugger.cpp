@@ -509,14 +509,14 @@ SBFile SBDebugger::GetInputFile() {
 FILE *SBDebugger::GetOutputFileHandle() {
   LLDB_INSTRUMENT_VA(this);
   if (m_opaque_sp)
-    return m_opaque_sp->GetOutputStreamSP()->GetFile().GetStream();
+    return m_opaque_sp->GetOutputStreamSP()->GetUnlockedFile().GetStream();
   return nullptr;
 }
 
 SBFile SBDebugger::GetOutputFile() {
   LLDB_INSTRUMENT_VA(this);
   if (m_opaque_sp)
-    return SBFile(m_opaque_sp->GetOutputStreamSP()->GetFileSP());
+    return SBFile(m_opaque_sp->GetOutputStreamSP()->GetUnlockedFileSP());
   return SBFile();
 }
 
@@ -524,7 +524,7 @@ FILE *SBDebugger::GetErrorFileHandle() {
   LLDB_INSTRUMENT_VA(this);
 
   if (m_opaque_sp)
-    return m_opaque_sp->GetErrorStreamSP()->GetFile().GetStream();
+    return m_opaque_sp->GetErrorStreamSP()->GetUnlockedFile().GetStream();
   return nullptr;
 }
 
@@ -532,7 +532,7 @@ SBFile SBDebugger::GetErrorFile() {
   LLDB_INSTRUMENT_VA(this);
   SBFile file;
   if (m_opaque_sp)
-    return SBFile(m_opaque_sp->GetErrorStreamSP()->GetFileSP());
+    return SBFile(m_opaque_sp->GetErrorStreamSP()->GetUnlockedFileSP());
   return SBFile();
 }
 
@@ -573,8 +573,8 @@ void SBDebugger::HandleCommand(const char *command) {
 
     sb_interpreter.HandleCommand(command, result, false);
 
-    result.PutError(m_opaque_sp->GetErrorStreamSP()->GetFileSP());
-    result.PutOutput(m_opaque_sp->GetOutputStreamSP()->GetFileSP());
+    result.PutError(m_opaque_sp->GetErrorStreamSP()->GetUnlockedFileSP());
+    result.PutOutput(m_opaque_sp->GetOutputStreamSP()->GetUnlockedFileSP());
 
     if (!m_opaque_sp->GetAsyncExecution()) {
       SBProcess process(GetCommandInterpreter().GetProcess());

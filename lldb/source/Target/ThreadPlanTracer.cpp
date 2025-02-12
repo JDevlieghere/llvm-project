@@ -41,13 +41,13 @@ ThreadPlanTracer::ThreadPlanTracer(Thread &thread)
     : m_process(*thread.GetProcess().get()), m_tid(thread.GetID()),
       m_enabled(false), m_stream_sp(), m_thread(nullptr) {}
 
-Stream *ThreadPlanTracer::GetLogStream() {
+StreamSP ThreadPlanTracer::GetLogStream() {
   if (m_stream_sp)
-    return m_stream_sp.get();
+    return m_stream_sp;
   else {
     TargetSP target_sp(GetThread().CalculateTarget());
     if (target_sp)
-      return target_sp->GetDebugger().GetOutputStreamSP().get();
+      return target_sp->GetDebugger().GetAsyncOutputStream();
   }
   return nullptr;
 }
@@ -65,12 +65,11 @@ void ThreadPlanTracer::Log() {
   bool show_frame_index = false;
   bool show_fullpaths = false;
 
-  Stream *stream = GetLogStream();
-  if (stream) {
-    GetThread().GetStackFrameAtIndex(0)->Dump(stream, show_frame_index,
+  if (lldb::StreamSP stream_sp = GetLogStream()) {
+    GetThread().GetStackFrameAtIndex(0)->Dump(stream_sp.get(), show_frame_index,
                                               show_fullpaths);
-    stream->Printf("\n");
-    stream->Flush();
+    stream_sp->Printf("\n");
+    stream_sp->Flush();
   }
 }
 
@@ -123,15 +122,14 @@ TypeFromUser ThreadPlanAssemblyTracer::GetIntPointerType() {
 
 ThreadPlanAssemblyTracer::~ThreadPlanAssemblyTracer() = default;
 
-void ThreadPlanAssemblyTracer::TracingStarted() {
-}
+void ThreadPlanAssemblyTracer::TracingStarted() {}
 
 void ThreadPlanAssemblyTracer::TracingEnded() { m_register_values.clear(); }
 
 void ThreadPlanAssemblyTracer::Log() {
-  Stream *stream = GetLogStream();
+  lldb::StreamSP stream_sp = GetLogStream();
 
-  if (!stream)
+  if (!stream_sp)
     return;
 
   RegisterContext *reg_ctx = GetThread().GetRegisterContext().get();
@@ -142,9 +140,10 @@ void ThreadPlanAssemblyTracer::Log() {
   uint8_t buffer[16] = {0}; // Must be big enough for any single instruction
   addr_valid = m_process.GetTarget().ResolveLoadAddress(pc, pc_addr);
 
-  pc_addr.Dump(stream, &GetThread(), Address::DumpStyleResolvedDescription,
+  pc_addr.Dump(stream_sp.get(), &GetThread(),
+               Address::DumpStyleResolvedDescription,
                Address::DumpStyleModuleWithFileAddress);
-  stream->PutCString(" ");
+  stream_sp->PutCString(" ");
 
   Disassembler *disassembler = GetDisassembler();
   if (disassembler) {
@@ -175,7 +174,7 @@ void ThreadPlanAssemblyTracer::Log() {
             instruction_list.GetInstructionAtIndex(0).get();
         const FormatEntity::Entry *disassemble_format =
             m_process.GetTarget().GetDebugger().GetDisassemblyFormat();
-        instruction->Dump(stream, max_opcode_byte_size, show_address,
+        instruction->Dump(stream_sp.get(), max_opcode_byte_size, show_address,
                           show_bytes, show_control_flow_kind, nullptr, nullptr,
                           nullptr, disassemble_format, 0);
       }
@@ -198,12 +197,12 @@ void ThreadPlanAssemblyTracer::Log() {
 
     if (abi->GetArgumentValues(GetThread(), value_list)) {
       for (int arg_index = 0; arg_index < num_args; ++arg_index) {
-        stream->Printf(
+        stream_sp->Printf(
             "\n\targ[%d]=%llx", arg_index,
             value_list.GetValueAtIndex(arg_index)->GetScalar().ULongLong());
 
         if (arg_index + 1 < num_args)
-          stream->PutCString(", ");
+          stream_sp->PutCString(", ");
       }
     }
   }
@@ -222,14 +221,13 @@ void ThreadPlanAssemblyTracer::Log() {
       if (m_register_values[reg_num].GetType() == RegisterValue::eTypeInvalid ||
           reg_value != m_register_values[reg_num]) {
         if (reg_value.GetType() != RegisterValue::eTypeInvalid) {
-          stream->PutCString("\n\t");
-          DumpRegisterValue(reg_value, *stream, *reg_info, true, false,
+          stream_sp->PutCString("\n\t");
+          DumpRegisterValue(reg_value, *stream_sp, *reg_info, true, false,
                             eFormatDefault);
         }
       }
       m_register_values[reg_num] = reg_value;
     }
   }
-  stream->EOL();
-  stream->Flush();
+  stream_sp->EOL();
 }
