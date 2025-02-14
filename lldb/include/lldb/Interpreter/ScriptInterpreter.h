@@ -134,6 +134,7 @@ private:
   lldb::FileSP m_input_file_sp;
   lldb::LockableStreamFileSP m_output_file_sp;
   lldb::LockableStreamFileSP m_error_file_sp;
+  LockableStreamFile::Mutex m_output_mutex;
   ThreadedCommunication m_communication;
   bool m_disconnect;
 };

@@ -18,6 +18,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <memory>
+#include <mutex>
 
 namespace lldb_private {
 
@@ -70,13 +71,17 @@ private:
 
 class LockableStreamFile {
 public:
-  LockableStreamFile(std::shared_ptr<StreamFile> stream_file_sp)
-      : m_file_sp(stream_file_sp->GetFileSP()) {}
-  LockableStreamFile(StreamFile &stream_file)
-      : m_file_sp(stream_file.GetFileSP()) {}
-  LockableStreamFile(FILE *fh, bool transfer_ownership)
-      : m_file_sp(std::make_shared<NativeFile>(fh, transfer_ownership)) {}
-  LockableStreamFile(std::shared_ptr<File> file_sp) : m_file_sp(file_sp) {}
+  using Mutex = std::recursive_mutex;
+
+  LockableStreamFile(std::shared_ptr<StreamFile> stream_file_sp, Mutex &mutex)
+      : m_file_sp(stream_file_sp->GetFileSP()), m_mutex(mutex) {}
+  LockableStreamFile(StreamFile &stream_file, Mutex &mutex)
+      : m_file_sp(stream_file.GetFileSP()), m_mutex(mutex) {}
+  LockableStreamFile(FILE *fh, bool transfer_ownership, Mutex &mutex)
+      : m_file_sp(std::make_shared<NativeFile>(fh, transfer_ownership)),
+        m_mutex(mutex) {}
+  LockableStreamFile(std::shared_ptr<File> file_sp, Mutex &mutex)
+      : m_file_sp(file_sp), m_mutex(mutex) {}
 
   LockedStreamFile Lock() { return LockedStreamFile(m_file_sp, m_mutex); }
 
@@ -87,11 +92,11 @@ public:
   std::shared_ptr<File> GetUnlockedFileSP() { return m_file_sp; }
   /// @}
 
-  std::recursive_mutex &GetMutex() { return m_mutex; }
+  Mutex &GetMutex() { return m_mutex; }
 
 protected:
   std::shared_ptr<File> m_file_sp;
-  std::recursive_mutex m_mutex;
+  Mutex &m_mutex;
 
 private:
   LockableStreamFile(const LockableStreamFile &) = delete;

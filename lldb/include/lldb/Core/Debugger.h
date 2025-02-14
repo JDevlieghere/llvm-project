@@ -691,6 +691,7 @@ protected:
   lldb::FileSP m_input_file_sp;
   lldb::LockableStreamFileSP m_output_stream_sp;
   lldb::LockableStreamFileSP m_error_stream_sp;
+  LockableStreamFile::Mutex m_output_mutex;
 
   /// Used for shadowing the input file when capturing a reproducer.
   repro::DataRecorder *m_input_recorder;

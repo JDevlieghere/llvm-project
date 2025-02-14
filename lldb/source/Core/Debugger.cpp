@@ -873,9 +873,11 @@ llvm::StringRef Debugger::GetStaticBroadcasterClass() {
 Debugger::Debugger(lldb::LogOutputCallback log_callback, void *baton)
     : UserID(g_unique_id++),
       Properties(std::make_shared<OptionValueProperties>()),
-      m_input_file_sp(std::make_shared<NativeFile>(stdin, false)),
-      m_output_stream_sp(std::make_shared<LockableStreamFile>(stdout, false)),
-      m_error_stream_sp(std::make_shared<LockableStreamFile>(stderr, false)),
+      m_input_file_sp(std::make_shared<NativeFile>(stdin, NativeFile::Unowned)),
+      m_output_stream_sp(std::make_shared<LockableStreamFile>(
+          stdout, NativeFile::Unowned, m_output_mutex)),
+      m_error_stream_sp(std::make_shared<LockableStreamFile>(
+          stderr, NativeFile::Unowned, m_output_mutex)),
       m_input_recorder(nullptr),
       m_broadcaster_manager_sp(BroadcasterManager::MakeBroadcasterManager()),
       m_terminal_state(), m_target_list(*this), m_platform_list(),
@@ -1083,12 +1085,14 @@ void Debugger::SetInputFile(FileSP file_sp) {
 
 void Debugger::SetOutputFile(FileSP file_sp) {
   assert(file_sp && file_sp->IsValid());
-  m_output_stream_sp = std::make_shared<LockableStreamFile>(file_sp);
+  m_output_stream_sp =
+      std::make_shared<LockableStreamFile>(file_sp, m_output_mutex);
 }
 
 void Debugger::SetErrorFile(FileSP file_sp) {
   assert(file_sp && file_sp->IsValid());
-  m_error_stream_sp = std::make_shared<LockableStreamFile>(file_sp);
+  m_error_stream_sp =
+      std::make_shared<LockableStreamFile>(file_sp, m_output_mutex);
 }
 
 void Debugger::SaveInputTerminalState() {
@@ -1244,7 +1248,7 @@ void Debugger::AdoptTopIOHandlerFilesIfInvalid(FileSP &in,
       in = GetInputFileSP();
     // If there is nothing, use stdin
     if (!in)
-      in = std::make_shared<NativeFile>(stdin, false);
+      in = std::make_shared<NativeFile>(stdin, NativeFile::Unowned);
   }
   // If no STDOUT has been set, then set it appropriately
   if (!out || !out->GetUnlockedFile().IsValid()) {
@@ -1254,7 +1258,8 @@ void Debugger::AdoptTopIOHandlerFilesIfInvalid(FileSP &in,
       out = GetOutputStreamSP();
     // If there is nothing, use stdout
     if (!out)
-      out = std::make_shared<LockableStreamFile>(stdout, false);
+      out = std::make_shared<LockableStreamFile>(stdout, NativeFile::Unowned,
+                                                 m_output_mutex);
   }
   // If no STDERR has been set, then set it appropriately
   if (!err || !err->GetUnlockedFile().IsValid()) {
@@ -1264,7 +1269,8 @@ void Debugger::AdoptTopIOHandlerFilesIfInvalid(FileSP &in,
       err = GetErrorStreamSP();
     // If there is nothing, use stderr
     if (!err)
-      err = std::make_shared<LockableStreamFile>(stderr, false);
+      err = std::make_shared<LockableStreamFile>(stderr, NativeFile::Unowned,
+                                                 m_output_mutex);
   }
 }
 
