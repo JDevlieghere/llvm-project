@@ -206,9 +206,7 @@ ScriptInterpreterIORedirect::Create(bool enable_io, Debugger &debugger,
 ScriptInterpreterIORedirect::ScriptInterpreterIORedirect(
     std::unique_ptr<File> input, std::unique_ptr<File> output)
     : m_input_file_sp(std::move(input)),
-      m_output_file_sp(std::make_shared<LockableStreamFile>(std::move(output),
-                                                            m_output_mutex)),
-      m_error_file_sp(m_output_file_sp),
+      m_stream_pair_sp(std::make_shared<LockableStreamPair>(std::move(output))),
       m_communication("lldb.ScriptInterpreterIORedirect.comm"),
       m_disconnect(false) {}
 
@@ -241,10 +239,8 @@ ScriptInterpreterIORedirect::ScriptInterpreterIORedirect(
       m_disconnect = true;
 
       FILE *outfile_handle = fdopen(pipe.ReleaseWriteFileDescriptor(), "w");
-      m_output_file_sp = std::make_shared<LockableStreamFile>(
-          std::make_shared<StreamFile>(outfile_handle, NativeFile::Owned),
-          m_output_mutex);
-      m_error_file_sp = m_output_file_sp;
+      m_stream_pair_sp = std::make_shared<LockableStreamPair>(
+          outfile_handle, NativeFile::Owned);
       if (outfile_handle)
         ::setbuf(outfile_handle, nullptr);
 
@@ -255,30 +251,29 @@ ScriptInterpreterIORedirect::ScriptInterpreterIORedirect(
     }
   }
 
-  if (!m_input_file_sp || !m_output_file_sp || !m_error_file_sp)
-    debugger.AdoptTopIOHandlerFilesIfInvalid(m_input_file_sp, m_output_file_sp,
-                                             m_error_file_sp);
+  if (!m_input_file_sp || !m_stream_pair_sp)
+    debugger.AdoptTopIOHandlerFilesIfInvalid(m_input_file_sp, m_stream_pair_sp);
 }
 
 void ScriptInterpreterIORedirect::Flush() {
-  if (m_output_file_sp)
-    m_output_file_sp->Lock().Flush();
-  if (m_error_file_sp)
-    m_error_file_sp->Lock().Flush();
+  if (m_stream_pair_sp) {
+    m_stream_pair_sp->GetOutputStreamSP()->Lock().Flush();
+    m_stream_pair_sp->GetErrorStreamSP()->Lock().Flush();
+  }
 }
 
 ScriptInterpreterIORedirect::~ScriptInterpreterIORedirect() {
   if (!m_disconnect)
     return;
 
-  assert(m_output_file_sp);
-  assert(m_error_file_sp);
-  assert(m_output_file_sp == m_error_file_sp);
+  assert(m_stream_pair_sp);
+  assert(m_stream_pair_sp->GetOutputStreamSP() ==
+         m_stream_pair_sp->GetErrorStreamSP());
 
   // Close the write end of the pipe since we are done with our one line
   // script. This should cause the read thread that output_comm is using to
   // exit.
-  m_output_file_sp->GetUnlockedFile().Close();
+  m_stream_pair_sp->GetOutputStreamSP()->GetUnlockedFile().Close();
   // The close above should cause this thread to exit when it gets to the end
   // of file, so let it get all its data.
   m_communication.JoinReadThread();

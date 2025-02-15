@@ -874,10 +874,7 @@ Debugger::Debugger(lldb::LogOutputCallback log_callback, void *baton)
     : UserID(g_unique_id++),
       Properties(std::make_shared<OptionValueProperties>()),
       m_input_file_sp(std::make_shared<NativeFile>(stdin, NativeFile::Unowned)),
-      m_output_stream_sp(std::make_shared<LockableStreamFile>(
-          stdout, NativeFile::Unowned, m_output_mutex)),
-      m_error_stream_sp(std::make_shared<LockableStreamFile>(
-          stderr, NativeFile::Unowned, m_output_mutex)),
+      m_stream_pair_sp(std::make_shared<LockableStreamPair>()),
       m_input_recorder(nullptr),
       m_broadcaster_manager_sp(BroadcasterManager::MakeBroadcasterManager()),
       m_terminal_state(), m_target_list(*this), m_platform_list(),
@@ -1084,15 +1081,11 @@ void Debugger::SetInputFile(FileSP file_sp) {
 }
 
 void Debugger::SetOutputFile(FileSP file_sp) {
-  assert(file_sp && file_sp->IsValid());
-  m_output_stream_sp =
-      std::make_shared<LockableStreamFile>(file_sp, m_output_mutex);
+  m_stream_pair_sp->SetOutputFile(file_sp);
 }
 
 void Debugger::SetErrorFile(FileSP file_sp) {
-  assert(file_sp && file_sp->IsValid());
-  m_error_stream_sp =
-      std::make_shared<LockableStreamFile>(file_sp, m_output_mutex);
+  m_stream_pair_sp->SetErrorFile(file_sp);
 }
 
 void Debugger::SaveInputTerminalState() {
@@ -1202,8 +1195,9 @@ bool Debugger::CheckTopIOHandlerTypes(IOHandler::Type top_type,
 void Debugger::PrintAsync(const char *s, size_t len, bool is_stdout) {
   bool printed = m_io_handler_stack.PrintAsync(s, len, is_stdout);
   if (!printed) {
-    LockableStreamFileSP stream_sp =
-        is_stdout ? m_output_stream_sp : m_error_stream_sp;
+    LockableStreamFileSP stream_sp = is_stdout
+                                         ? m_stream_pair_sp->GetOutputStreamSP()
+                                         : m_stream_pair_sp->GetErrorStreamSP();
     LockedStreamFile locked_stream = stream_sp->Lock();
     locked_stream.Write(s, len);
   }
@@ -1230,9 +1224,8 @@ void Debugger::RunIOHandlerAsync(const IOHandlerSP &reader_sp,
   PushIOHandler(reader_sp, cancel_top_handler);
 }
 
-void Debugger::AdoptTopIOHandlerFilesIfInvalid(FileSP &in,
-                                               LockableStreamFileSP &out,
-                                               LockableStreamFileSP &err) {
+void Debugger::AdoptTopIOHandlerFilesIfInvalid(
+    FileSP &in, lldb::LockableStreamPairSP &out_pair) {
   // Before an IOHandler runs, it must have in/out/err streams. This function
   // is called when one ore more of the streams are nullptr. We use the top
   // input reader's in/out/err streams, or fall back to the debugger file
@@ -1250,6 +1243,8 @@ void Debugger::AdoptTopIOHandlerFilesIfInvalid(FileSP &in,
     if (!in)
       in = std::make_shared<NativeFile>(stdin, NativeFile::Unowned);
   }
+
+#if 0
   // If no STDOUT has been set, then set it appropriately
   if (!out || !out->GetUnlockedFile().IsValid()) {
     if (top_reader_sp)
@@ -1272,6 +1267,7 @@ void Debugger::AdoptTopIOHandlerFilesIfInvalid(FileSP &in,
       err = std::make_shared<LockableStreamFile>(stderr, NativeFile::Unowned,
                                                  m_output_mutex);
   }
+#endif
 }
 
 void Debugger::PushIOHandler(const IOHandlerSP &reader_sp,

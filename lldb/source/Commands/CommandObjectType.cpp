@@ -170,8 +170,10 @@ public:
         "        internal_dict: an LLDB support object not to be used\"\"\"\n";
 
     if (interactive) {
-      if (LockableStreamFileSP output_sp = io_handler.GetOutputStreamFileSP()) {
-        LockedStreamFile locked_stream = output_sp->Lock();
+      if (LockableStreamPairSP stream_pair_sp =
+              io_handler.GetOutputStreamPairSP()) {
+        LockedStreamFile locked_stream =
+            stream_pair_sp->GetOutputStream().Lock();
         locked_stream.PutCString(g_summary_addreader_instructions);
       }
     }
@@ -179,7 +181,8 @@ public:
 
   void IOHandlerInputComplete(IOHandler &io_handler,
                               std::string &data) override {
-    LockableStreamFileSP error_sp = io_handler.GetErrorStreamFileSP();
+    LockableStreamFileSP error_sp =
+        io_handler.GetOutputStreamPairSP()->GetErrorStreamSP();
 
 #if LLDB_ENABLE_PYTHON
     ScriptInterpreter *interpreter = GetDebugger().GetScriptInterpreter();
@@ -410,8 +413,10 @@ protected:
 
   void IOHandlerActivated(IOHandler &io_handler, bool interactive) override {
     if (interactive) {
-      if (LockableStreamFileSP output_sp = io_handler.GetOutputStreamFileSP()) {
-        LockedStreamFile locked_stream = output_sp->Lock();
+      if (LockableStreamPairSP stream_pair_sp =
+              io_handler.GetOutputStreamPairSP()) {
+        LockedStreamFile locked_stream =
+            stream_pair_sp->GetOutputStream().Lock();
         locked_stream.PutCString(g_synth_addreader_instructions);
       }
     }
@@ -419,7 +424,8 @@ protected:
 
   void IOHandlerInputComplete(IOHandler &io_handler,
                               std::string &data) override {
-    LockableStreamFileSP error_sp = io_handler.GetErrorStreamFileSP();
+    LockableStreamFileSP error_sp =
+        io_handler.GetOutputStreamPairSP()->GetErrorStreamSP();
 
 #if LLDB_ENABLE_PYTHON
     ScriptInterpreter *interpreter = GetDebugger().GetScriptInterpreter();

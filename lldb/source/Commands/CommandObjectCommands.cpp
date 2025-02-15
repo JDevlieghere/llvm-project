@@ -24,6 +24,7 @@
 #include "lldb/Interpreter/ScriptInterpreter.h"
 #include "lldb/Utility/Args.h"
 #include "lldb/Utility/StringList.h"
+#include "lldb/lldb-forward.h"
 #include "llvm/ADT/StringRef.h"
 #include <optional>
 
@@ -794,9 +795,10 @@ a number follows 'f':"
 protected:
   void IOHandlerActivated(IOHandler &io_handler, bool interactive) override {
     if (interactive) {
-      if (lldb::LockableStreamFileSP output_sp =
-              io_handler.GetOutputStreamFileSP()) {
-        LockedStreamFile locked_stream = output_sp->Lock();
+      if (lldb::LockableStreamPairSP stream_pair_sp =
+              io_handler.GetOutputStreamPairSP()) {
+        LockedStreamFile locked_stream =
+            stream_pair_sp->GetOutputStream().Lock();
         locked_stream.PutCString(
             "Enter one or more sed substitution commands in "
             "the form: 's/<regex>/<subst>/'.\nTerminate the "
@@ -2382,9 +2384,10 @@ protected:
 
   void IOHandlerActivated(IOHandler &io_handler, bool interactive) override {
     if (interactive) {
-      if (lldb::LockableStreamFileSP output_sp =
-              io_handler.GetOutputStreamFileSP()) {
-        LockedStreamFile locked_stream = output_sp->Lock();
+      if (lldb::LockableStreamPairSP stream_pair_sp =
+              io_handler.GetOutputStreamPairSP()) {
+        LockedStreamFile locked_stream =
+            stream_pair_sp->GetOutputStream().Lock();
         locked_stream.PutCString(g_python_command_instructions);
       }
     }
@@ -2392,7 +2395,8 @@ protected:
 
   void IOHandlerInputComplete(IOHandler &io_handler,
                               std::string &data) override {
-    LockableStreamFileSP error_sp = io_handler.GetErrorStreamFileSP();
+    LockableStreamFileSP error_sp =
+        io_handler.GetOutputStreamPairSP()->GetErrorStreamSP();
 
     ScriptInterpreter *interpreter = GetDebugger().GetScriptInterpreter();
     if (interpreter) {

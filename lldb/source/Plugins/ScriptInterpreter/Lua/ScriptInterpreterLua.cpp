@@ -78,9 +78,10 @@ public:
     if (instructions == nullptr)
       return;
     if (interactive) {
-      if (lldb::LockableStreamFileSP output_sp =
-              io_handler.GetOutputStreamFileSP()) {
-        LockedStreamFile locked_stream = output_sp->Lock();
+      if (lldb::LockableStreamPairSP stream_pair_sp =
+              io_handler.GetOutputStreamPairSP()) {
+        LockedStreamFile locked_stream =
+            stream_pair_sp->GetOutputStream().Lock();
         locked_stream << instructions;
       }
     }
@@ -119,9 +120,12 @@ public:
         Status error = m_script_interpreter.SetBreakpointCommandCallback(
             bp_options, data.c_str(), /*is_callback=*/false);
         if (error.Fail()) {
-          LockedStreamFile locked_stream =
-              io_handler.GetErrorStreamFileSP()->Lock();
-          locked_stream << error.AsCString() << '\n';
+          if (lldb::LockableStreamPairSP stream_pair_sp =
+                  io_handler.GetOutputStreamPairSP()) {
+            LockedStreamFile locked_stream =
+                stream_pair_sp->GetErrorStream().Lock();
+            locked_stream << error.AsCString() << '\n';
+          }
         }
       }
       io_handler.SetIsDone(true);
@@ -140,9 +144,12 @@ public:
         return;
       }
       if (llvm::Error error = m_script_interpreter.GetLua().Run(data)) {
-        LockedStreamFile locked_stream =
-            io_handler.GetErrorStreamFileSP()->Lock();
-        locked_stream << toString(std::move(error));
+        if (lldb::LockableStreamPairSP stream_pair_sp =
+                io_handler.GetOutputStreamPairSP()) {
+          LockedStreamFile locked_stream =
+              stream_pair_sp->GetErrorStream().Lock();
+          locked_stream << toString(std::move(error));
+        }
       }
       break;
     }

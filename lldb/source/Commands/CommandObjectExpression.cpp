@@ -502,16 +502,14 @@ bool CommandObjectExpression::EvaluateExpression(llvm::StringRef expr,
 void CommandObjectExpression::IOHandlerInputComplete(IOHandler &io_handler,
                                                      std::string &line) {
   io_handler.SetIsDone(true);
-  LockedStreamFile locked_output_stream =
-      io_handler.GetOutputStreamFileSP()->Lock();
-  LockedStreamFile locked_error_stream =
-      io_handler.GetErrorStreamFileSP()->Lock();
-
+  StreamSP output_stream =
+      GetCommandInterpreter().GetDebugger().GetAsyncOutputStream();
+  StreamSP error_stream =
+      GetCommandInterpreter().GetDebugger().GetAsyncErrorStream();
   CommandReturnObject return_obj(
       GetCommandInterpreter().GetDebugger().GetUseColor());
-  EvaluateExpression(line.c_str(), locked_output_stream, locked_error_stream,
-                     return_obj);
-  locked_output_stream << return_obj.GetErrorString();
+  EvaluateExpression(line.c_str(), *output_stream, *error_stream, return_obj);
+  *output_stream << return_obj.GetErrorString();
 }
 
 bool CommandObjectExpression::IOHandlerIsInputComplete(IOHandler &io_handler,
@@ -543,8 +541,9 @@ void CommandObjectExpression::GetMultilineExpression() {
                             1, // Show line numbers starting at 1
                             *this));
 
-  if (LockableStreamFileSP output_sp = io_handler_sp->GetOutputStreamFileSP()) {
-    LockedStreamFile locked_stream = output_sp->Lock();
+  if (LockableStreamPairSP stream_pair_sp =
+          io_handler_sp->GetOutputStreamPairSP()) {
+    LockedStreamFile locked_stream = stream_pair_sp->GetOutputStream().Lock();
     locked_stream.PutCString(
         "Enter expressions, then terminate with an empty line to evaluate:\n");
   }

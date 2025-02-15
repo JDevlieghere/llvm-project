@@ -4920,9 +4920,10 @@ Filter Options:
 protected:
   void IOHandlerActivated(IOHandler &io_handler, bool interactive) override {
     if (interactive) {
-      if (lldb::LockableStreamFileSP output_sp =
-              io_handler.GetOutputStreamFileSP()) {
-        LockedStreamFile locked_stream = output_sp->Lock();
+      if (lldb::LockableStreamPairSP stream_pair_sp =
+              io_handler.GetOutputStreamPairSP()) {
+        LockedStreamFile locked_stream =
+            stream_pair_sp->GetOutputStream().Lock();
         locked_stream.PutCString(
             "Enter your stop hook command(s).  Type 'DONE' to end.\n");
       }
@@ -4933,9 +4934,10 @@ protected:
                               std::string &line) override {
     if (m_stop_hook_sp) {
       if (line.empty()) {
-        if (lldb::LockableStreamFileSP error_sp =
-                io_handler.GetErrorStreamFileSP()) {
-          LockedStreamFile locked_stream = error_sp->Lock();
+        if (lldb::LockableStreamPairSP stream_pair_sp =
+                io_handler.GetOutputStreamPairSP()) {
+          LockedStreamFile locked_stream =
+              stream_pair_sp->GetErrorStream().Lock();
           locked_stream.Printf("error: stop hook #%" PRIu64
                                " aborted, no commands.\n",
                                m_stop_hook_sp->GetID());
@@ -4947,9 +4949,10 @@ protected:
             static_cast<Target::StopHookCommandLine *>(m_stop_hook_sp.get());
 
         hook_ptr->SetActionFromString(line);
-        if (lldb::LockableStreamFileSP output_sp =
-                io_handler.GetOutputStreamFileSP()) {
-          LockedStreamFile locked_stream = output_sp->Lock();
+        if (lldb::LockableStreamPairSP stream_pair_sp =
+                io_handler.GetOutputStreamPairSP()) {
+          LockedStreamFile locked_stream =
+              stream_pair_sp->GetOutputStream().Lock();
           locked_stream.Printf("Stop hook #%" PRIu64 " added.\n",
                                m_stop_hook_sp->GetID());
         }

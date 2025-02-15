@@ -7,10 +7,12 @@
 //===----------------------------------------------------------------------===//
 
 #include "lldb/Host/StreamFile.h"
+#include "lldb/Host/File.h"
 #include "lldb/Host/FileSystem.h"
 #include "lldb/Utility/LLDBLog.h"
 #include "lldb/Utility/Log.h"
 
+#include <cstddef>
 #include <cstdio>
 
 using namespace lldb;
@@ -51,4 +53,30 @@ void StreamFile::Flush() { m_file_sp->Flush(); }
 size_t StreamFile::WriteImpl(const void *s, size_t length) {
   m_file_sp->Write(s, length);
   return length;
+}
+
+LockableStreamPair::LockableStreamPair()
+    : m_output_stream_sp(std::make_shared<LockableStreamFile>(
+          stdout, NativeFile::Unowned, m_mutex)),
+      m_error_stream_sp(std::make_shared<LockableStreamFile>(
+          stderr, NativeFile::Unowned, m_mutex)) {}
+
+LockableStreamPair::LockableStreamPair(std::unique_ptr<File> file)
+    : m_output_stream_sp(
+          std::make_shared<LockableStreamFile>(std::move(file), m_mutex)),
+      m_error_stream_sp(m_output_stream_sp) {}
+
+LockableStreamPair::LockableStreamPair(FILE *fh, bool transfer_ownership)
+    : m_output_stream_sp(std::make_shared<LockableStreamFile>(
+          fh, transfer_ownership, m_mutex)),
+      m_error_stream_sp(m_output_stream_sp) {}
+
+void LockableStreamPair::SetOutputFile(lldb::FileSP file_sp) {
+  assert(file_sp && file_sp->IsValid());
+  m_output_stream_sp = std::make_shared<LockableStreamFile>(file_sp, m_mutex);
+}
+
+void LockableStreamPair::SetErrorFile(lldb::FileSP file_sp) {
+  assert(file_sp && file_sp->IsValid());
+  m_error_stream_sp = std::make_shared<LockableStreamFile>(file_sp, m_mutex);
 }

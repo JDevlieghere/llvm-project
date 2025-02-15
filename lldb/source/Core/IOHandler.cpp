@@ -53,25 +53,24 @@ using namespace lldb_private;
 using llvm::StringRef;
 
 IOHandler::IOHandler(Debugger &debugger, IOHandler::Type type)
-    : IOHandler(debugger, type,
-                FileSP(),               // Adopt STDIN from top input reader
-                LockableStreamFileSP(), // Adopt STDOUT from top input reader
-                LockableStreamFileSP(), // Adopt STDERR from top input reader
-                0                       // Flags
+    : IOHandler(
+          debugger, type,
+          FileSP(),               // Adopt STDIN from top input reader
+          LockableStreamPairSP(), // Adopt STDOUT & STDOUT from top input reader
+          0                       // Flags
 
       ) {}
 
 IOHandler::IOHandler(Debugger &debugger, IOHandler::Type type,
                      const lldb::FileSP &input_sp,
-                     const lldb::LockableStreamFileSP &output_sp,
-                     const lldb::LockableStreamFileSP &error_sp, uint32_t flags)
-    : m_debugger(debugger), m_input_sp(input_sp), m_output_sp(output_sp),
-      m_error_sp(error_sp), m_popped(false), m_flags(flags), m_type(type),
-      m_user_data(nullptr), m_done(false), m_active(false) {
+                     const lldb::LockableStreamPairSP &stream_pair_sp,
+                     uint32_t flags)
+    : m_debugger(debugger), m_input_sp(input_sp),
+      m_stream_pair_sp(stream_pair_sp), m_popped(false), m_flags(flags),
+      m_type(type), m_user_data(nullptr), m_done(false), m_active(false) {
   // If any files are not specified, then adopt them from the top input reader.
-  if (!m_input_sp || !m_output_sp || !m_error_sp)
-    debugger.AdoptTopIOHandlerFilesIfInvalid(m_input_sp, m_output_sp,
-                                             m_error_sp);
+  if (!m_input_sp || !m_stream_pair_sp)
+    debugger.AdoptTopIOHandlerFilesIfInvalid(m_input_sp, m_stream_pair_sp);
 }
 
 IOHandler::~IOHandler() = default;
@@ -81,18 +80,24 @@ int IOHandler::GetInputFD() {
 }
 
 int IOHandler::GetOutputFD() {
-  return (m_output_sp ? m_output_sp->GetUnlockedFile().GetDescriptor() : -1);
+  return (m_stream_pair_sp ? m_stream_pair_sp->GetOutputStreamSP()
+                                 ->GetUnlockedFile()
+                                 .GetDescriptor()
+                           : -1);
 }
 
 int IOHandler::GetErrorFD() {
-  return (m_error_sp ? m_error_sp->GetUnlockedFile().GetDescriptor() : -1);
+  return (m_stream_pair_sp ? m_stream_pair_sp->GetErrorStreamSP()
+                                 ->GetUnlockedFile()
+                                 .GetDescriptor()
+                           : -1);
 }
 
 FileSP IOHandler::GetInputFileSP() { return m_input_sp; }
 
-LockableStreamFileSP IOHandler::GetOutputStreamFileSP() { return m_output_sp; }
-
-LockableStreamFileSP IOHandler::GetErrorStreamFileSP() { return m_error_sp; }
+LockableStreamPairSP IOHandler::GetOutputStreamPairSP() {
+  return m_stream_pair_sp;
+}
 
 bool IOHandler::GetIsInteractive() {
   return GetInputFileSP() ? GetInputFileSP()->GetIsInteractive() : false;
@@ -107,7 +112,9 @@ void IOHandler::SetPopped(bool b) { m_popped.SetValue(b, eBroadcastOnChange); }
 void IOHandler::WaitForPop() { m_popped.WaitForValueEqualTo(true); }
 
 void IOHandler::PrintAsync(const char *s, size_t len, bool is_stdout) {
-  lldb::LockableStreamFileSP stream_sp = is_stdout ? m_output_sp : m_error_sp;
+  lldb::LockableStreamFileSP stream_sp =
+      is_stdout ? m_stream_pair_sp->GetOutputStreamSP()
+                : m_stream_pair_sp->GetErrorStreamSP();
   LockedStreamFile locked_Stream = stream_sp->Lock();
   locked_Stream.Write(s, len);
 }
@@ -215,25 +222,23 @@ IOHandlerEditline::IOHandlerEditline(
     llvm::StringRef prompt, llvm::StringRef continuation_prompt,
     bool multi_line, bool color, uint32_t line_number_start,
     IOHandlerDelegate &delegate)
-    : IOHandlerEditline(
-          debugger, type,
-          FileSP(),               // Inherit input from top input reader
-          LockableStreamFileSP(), // Inherit output from top input reader
-          LockableStreamFileSP(), // Inherit error from top input reader
-          0,                      // Flags
-          editline_name,          // Used for saving history files
-          prompt, continuation_prompt, multi_line, color, line_number_start,
-          delegate) {}
+    : IOHandlerEditline(debugger, type,
+                        FileSP(), // Inherit input from top input reader
+                        LockableStreamPairSP(), // Inherit output & error from
+                                                // top input reader
+                        0,                      // Flags
+                        editline_name,          // Used for saving history files
+                        prompt, continuation_prompt, multi_line, color,
+                        line_number_start, delegate) {}
 
 IOHandlerEditline::IOHandlerEditline(
     Debugger &debugger, IOHandler::Type type, const lldb::FileSP &input_sp,
-    const lldb::LockableStreamFileSP &output_sp,
-    const lldb::LockableStreamFileSP &error_sp, uint32_t flags,
+    const lldb::LockableStreamPairSP &stream_pair_sp, uint32_t flags,
     const char *editline_name, // Used for saving history files
     llvm::StringRef prompt, llvm::StringRef continuation_prompt,
     bool multi_line, bool color, uint32_t line_number_start,
     IOHandlerDelegate &delegate)
-    : IOHandler(debugger, type, input_sp, output_sp, error_sp, flags),
+    : IOHandler(debugger, type, input_sp, stream_pair_sp, flags),
 #if LLDB_ENABLE_LIBEDIT
       m_editline_up(),
 #endif
@@ -244,12 +249,12 @@ IOHandlerEditline::IOHandlerEditline(
   SetPrompt(prompt);
 
 #if LLDB_ENABLE_LIBEDIT
-  const bool use_editline = m_input_sp && m_output_sp && m_error_sp &&
-                            m_input_sp->GetIsRealTerminal();
+  const bool use_editline =
+      m_input_sp && m_stream_pair_sp && m_input_sp->GetIsRealTerminal();
   if (use_editline) {
     m_editline_up = std::make_unique<Editline>(
         editline_name, m_input_sp ? m_input_sp->GetStream() : nullptr,
-        m_output_sp, m_error_sp, m_color);
+        m_stream_pair_sp, m_color);
     m_editline_up->SetIsInputCompleteCallback(
         [this](Editline *editline, StringList &lines) {
           return this->IsInputCompleteCallback(editline, lines);
@@ -350,8 +355,9 @@ bool IOHandlerEditline::GetLine(std::string &line, bool &interrupted) {
       prompt = GetPrompt();
 
     if (prompt && prompt[0]) {
-      if (m_output_sp) {
-        LockedStreamFile locked_stream = m_output_sp->Lock();
+      if (m_stream_pair_sp) {
+        LockedStreamFile locked_stream =
+            m_stream_pair_sp->GetOutputStreamSP()->Lock();
         locked_stream.Printf("%s", prompt);
       }
     }
@@ -529,8 +535,9 @@ bool IOHandlerEditline::GetLines(StringList &lines, bool &interrupted) {
       // Show line numbers if we are asked to
       std::string line;
       if (m_base_line_number > 0 && GetIsInteractive()) {
-        if (m_output_sp) {
-          LockedStreamFile locked_stream = m_output_sp->Lock();
+        if (m_stream_pair_sp) {
+          LockedStreamFile locked_stream =
+              m_stream_pair_sp->GetOutputStreamSP()->Lock();
           locked_stream.Printf("%u%s",
                                m_base_line_number + (uint32_t)lines.GetSize(),
                                GetPrompt() == nullptr ? " " : "");
@@ -616,7 +623,9 @@ void IOHandlerEditline::GotEOF() {
 void IOHandlerEditline::PrintAsync(const char *s, size_t len, bool is_stdout) {
 #if LLDB_ENABLE_LIBEDIT
   if (m_editline_up) {
-    lldb::LockableStreamFileSP stream_sp = is_stdout ? m_output_sp : m_error_sp;
+    lldb::LockableStreamFileSP stream_sp =
+        is_stdout ? m_stream_pair_sp->GetOutputStreamSP()
+                  : m_stream_pair_sp->GetErrorStreamSP();
     m_editline_up->PrintAsync(stream_sp, s, len);
   } else
 #endif

@@ -7576,7 +7576,9 @@ void IOHandlerCursesGUI::Activate() {
   if (!m_app_ap) {
     m_app_ap = std::make_unique<Application>(
         m_input_sp ? m_input_sp->GetStream() : nullptr,
-        m_output_sp ? m_input_sp->GetStream() : nullptr);
+        m_stream_pair_sp
+            ? m_stream_pair_sp->GetOutputStream().GetUnlockedFile().GetStream()
+            : nullptr);
 
     // This is both a window and a menu delegate
     std::shared_ptr<ApplicationDelegate> app_delegate_sp(

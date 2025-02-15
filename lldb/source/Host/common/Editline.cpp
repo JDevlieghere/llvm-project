@@ -391,7 +391,8 @@ void Editline::MoveCursor(CursorLocation from, CursorLocation to) {
       (int)((info->cursor - info->buffer) + GetPromptWidth());
   int editline_cursor_row = editline_cursor_position / m_terminal_width;
 
-  LockedStreamFile locked_stream = m_output_stream_sp->Lock();
+  LockedStreamFile locked_stream =
+      m_stream_pair_sp->GetOutputStreamSP()->Lock();
 
   // Determine relative starting and ending lines
   int fromLine = GetLineIndexForLocation(from, editline_cursor_row);
@@ -417,7 +418,8 @@ void Editline::MoveCursor(CursorLocation from, CursorLocation to) {
 }
 
 void Editline::DisplayInput(int firstIndex) {
-  LockedStreamFile locked_stream = m_output_stream_sp->Lock();
+  LockedStreamFile locked_stream =
+      m_stream_pair_sp->GetOutputStreamSP()->Lock();
   fprintf(locked_stream.GetFile().GetStream(),
           ANSI_SET_COLUMN_N ANSI_CLEAR_BELOW, 1);
   int line_count = (int)m_input_lines.size();
@@ -541,7 +543,8 @@ int Editline::GetCharacter(EditLineGetCharType *c) {
   // Paint a ANSI formatted version of the desired prompt over the version
   // libedit draws. (will only be requested if colors are supported)
   if (m_needs_prompt_repaint) {
-    LockedStreamFile locked_stream = m_output_stream_sp->Lock();
+    LockedStreamFile locked_stream =
+        m_stream_pair_sp->GetOutputStreamSP()->Lock();
     MoveCursor(CursorLocation::EditingCursor, CursorLocation::EditingPrompt);
     fprintf(locked_stream.GetFile().GetStream(),
             "%s"
@@ -581,10 +584,10 @@ int Editline::GetCharacter(EditLineGetCharType *c) {
     // indefinitely. This gives a chance for someone to interrupt us. After
     // Read returns, immediately lock the mutex again and check if we were
     // interrupted.
-    m_output_stream_sp->GetMutex().unlock();
+    m_stream_pair_sp->GetOutputStreamSP()->GetMutex().unlock();
     int read_count =
         m_input_connection.Read(&ch, 1, std::nullopt, status, nullptr);
-    m_output_stream_sp->GetMutex().lock();
+    m_stream_pair_sp->GetOutputStreamSP()->GetMutex().lock();
     if (m_editor_status == EditorStatus::Interrupted) {
       while (read_count > 0 && status == lldb::eConnectionStatusSuccess)
         read_count =
@@ -707,14 +710,16 @@ unsigned char Editline::EndOrAddLineCommand(int ch) {
     }
   }
   MoveCursor(CursorLocation::EditingCursor, CursorLocation::BlockEnd);
-  LockedStreamFile locked_stream = m_output_stream_sp->Lock();
+  LockedStreamFile locked_stream =
+      m_stream_pair_sp->GetOutputStreamSP()->Lock();
   fprintf(locked_stream.GetFile().GetStream(), "\n");
   m_editor_status = EditorStatus::Complete;
   return CC_NEWLINE;
 }
 
 unsigned char Editline::DeleteNextCharCommand(int ch) {
-  LockedStreamFile locked_stream = m_output_stream_sp->Lock();
+  LockedStreamFile locked_stream =
+      m_stream_pair_sp->GetOutputStreamSP()->Lock();
   LineInfoW *info = const_cast<LineInfoW *>(el_wline(m_editline));
 
   // Just delete the next character normally if possible
@@ -776,7 +781,8 @@ unsigned char Editline::DeletePreviousCharCommand(int ch) {
       priorLine + m_input_lines[m_current_line_index];
 
   // Repaint from the new line down
-  LockedStreamFile locked_stream = m_output_stream_sp->Lock();
+  LockedStreamFile locked_stream =
+      m_stream_pair_sp->GetOutputStreamSP()->Lock();
   fprintf(locked_stream.GetFile().GetStream(), ANSI_UP_N_ROWS ANSI_SET_COLUMN_N,
           CountRowsForLine(priorLine), 1);
   DisplayInput(m_current_line_index);
@@ -795,7 +801,8 @@ unsigned char Editline::PreviousLineCommand(int ch) {
     return RecallHistory(HistoryOperation::Older);
   }
 
-  LockedStreamFile locked_stream = m_output_stream_sp->Lock();
+  LockedStreamFile locked_stream =
+      m_stream_pair_sp->GetOutputStreamSP()->Lock();
 
   // Start from a known location
   MoveCursor(CursorLocation::EditingCursor, CursorLocation::EditingPrompt);
@@ -842,7 +849,8 @@ unsigned char Editline::NextLineCommand(int ch) {
   int cursor_position = (int)((info->cursor - info->buffer) + GetPromptWidth());
   int cursor_row = cursor_position / m_terminal_width;
 
-  LockedStreamFile locked_stream = m_output_stream_sp->Lock();
+  LockedStreamFile locked_stream =
+      m_stream_pair_sp->GetOutputStreamSP()->Lock();
   for (int line_count = 0; line_count < m_current_line_rows - cursor_row;
        line_count++) {
     fprintf(locked_stream.GetFile().GetStream(), "\n");
@@ -1045,7 +1053,8 @@ void Editline::DisplayCompletions(
     Editline &editline, llvm::ArrayRef<CompletionResult::Completion> results) {
   assert(!results.empty());
 
-  LockedStreamFile locked_stream = editline.m_output_stream_sp->Lock();
+  LockedStreamFile locked_stream =
+      editline.m_stream_pair_sp->GetOutputStreamSP()->Lock();
 
   fprintf(locked_stream.GetFile().GetStream(),
           "\n" ANSI_CLEAR_BELOW "Available completions:\n");
@@ -1198,7 +1207,8 @@ unsigned char Editline::TypedCharacter(int ch) {
                        line_info->lastchar - line_info->buffer);
 
   if (std::optional<std::string> to_add = m_suggestion_callback(line)) {
-    LockedStreamFile locked_stream = m_output_stream_sp->Lock();
+    LockedStreamFile locked_stream =
+        m_stream_pair_sp->GetOutputStreamSP()->Lock();
     std::string to_add_color =
         m_suggestion_ansi_prefix + to_add.value() + m_suggestion_ansi_suffix;
     fputs(typed.c_str(), locked_stream.GetFile().GetStream());
@@ -1253,8 +1263,10 @@ void Editline::ConfigureEditor(bool multiline) {
     el_end(m_editline);
   }
 
-  LockedStreamFile locked_output_stream = m_output_stream_sp->Lock();
-  LockedStreamFile locked_error_stream = m_output_stream_sp->Lock();
+  LockedStreamFile locked_output_stream =
+      m_stream_pair_sp->GetOutputStreamSP()->Lock();
+  LockedStreamFile locked_error_stream =
+      m_stream_pair_sp->GetOutputStreamSP()->Lock();
   m_editline = el_init(m_editor_name.c_str(), m_input_file,
                        locked_output_stream.GetFile().GetStream(),
                        locked_error_stream.GetFile().GetStream());
@@ -1494,12 +1506,11 @@ Editline *Editline::InstanceFor(EditLine *editline) {
 }
 
 Editline::Editline(const char *editline_name, FILE *input_file,
-                   lldb::LockableStreamFileSP output_stream_sp,
-                   lldb::LockableStreamFileSP error_stream_sp, bool color)
+                   lldb::LockableStreamPairSP stream_pair_sp, bool color)
     : m_editor_status(EditorStatus::Complete), m_input_file(input_file),
-      m_output_stream_sp(output_stream_sp), m_error_stream_sp(error_stream_sp),
+      m_stream_pair_sp(stream_pair_sp),
       m_input_connection(fileno(input_file), false), m_color(color) {
-  assert(output_stream_sp && error_stream_sp);
+  assert(stream_pair_sp);
   // Get a shared history instance
   m_editor_name = (editline_name == nullptr) ? "lldb-tmp" : editline_name;
   m_history_sp = EditlineHistory::GetHistory(m_editor_name);
@@ -1573,7 +1584,8 @@ uint32_t Editline::GetCurrentLine() { return m_current_line_index; }
 
 bool Editline::Interrupt() {
   bool result = true;
-  LockedStreamFile locked_stream = m_output_stream_sp->Lock();
+  LockedStreamFile locked_stream =
+      m_stream_pair_sp->GetOutputStreamSP()->Lock();
   if (m_editor_status == EditorStatus::Editing) {
     fprintf(locked_stream.GetFile().GetStream(), "^C\n");
     result = m_input_connection.InterruptRead();
@@ -1584,7 +1596,8 @@ bool Editline::Interrupt() {
 
 bool Editline::Cancel() {
   bool result = true;
-  LockedStreamFile locked_stream = m_output_stream_sp->Lock();
+  LockedStreamFile locked_stream =
+      m_stream_pair_sp->GetOutputStreamSP()->Lock();
   if (m_editor_status == EditorStatus::Editing) {
     MoveCursor(CursorLocation::EditingCursor, CursorLocation::BlockStart);
     fprintf(locked_stream.GetFile().GetStream(), ANSI_CLEAR_BELOW);
@@ -1599,7 +1612,8 @@ bool Editline::GetLine(std::string &line, bool &interrupted) {
   m_input_lines = std::vector<EditLineStringType>();
   m_input_lines.insert(m_input_lines.begin(), EditLineConstString(""));
 
-  LockedStreamFile locked_stream = m_output_stream_sp->Lock();
+  LockedStreamFile locked_stream =
+      m_stream_pair_sp->GetOutputStreamSP()->Lock();
 
   lldbassert(m_editor_status != EditorStatus::Editing);
   if (m_editor_status == EditorStatus::Interrupted) {
@@ -1644,7 +1658,8 @@ bool Editline::GetLines(int first_line_number, StringList &lines,
   m_input_lines = std::vector<EditLineStringType>();
   m_input_lines.insert(m_input_lines.begin(), EditLineConstString(""));
 
-  LockedStreamFile locked_stream = m_output_stream_sp->Lock();
+  LockedStreamFile locked_stream =
+      m_stream_pair_sp->GetOutputStreamSP()->Lock();
 
   // Begin the line editing loop
   DisplayInput();
@@ -1676,7 +1691,8 @@ bool Editline::GetLines(int first_line_number, StringList &lines,
 
 void Editline::PrintAsync(lldb::LockableStreamFileSP stream_sp, const char *s,
                           size_t len) {
-  LockedStreamFile locked_stream = m_output_stream_sp->Lock();
+  LockedStreamFile locked_stream =
+      m_stream_pair_sp->GetOutputStreamSP()->Lock();
   if (m_editor_status == EditorStatus::Editing) {
     SaveEditedLine();
     MoveCursor(CursorLocation::EditingCursor, CursorLocation::BlockStart);

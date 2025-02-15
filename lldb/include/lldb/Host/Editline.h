@@ -153,8 +153,7 @@ using namespace line_editor;
 class Editline {
 public:
   Editline(const char *editor_name, FILE *input_file,
-           lldb::LockableStreamFileSP output_stream_sp,
-           lldb::LockableStreamFileSP error_stream_sp, bool color);
+           lldb::LockableStreamPairSP stream_pair_sp, bool color);
 
   ~Editline();
 
@@ -395,8 +394,7 @@ private:
   volatile std::sig_atomic_t m_terminal_size_has_changed = 0;
   std::string m_editor_name;
   FILE *m_input_file;
-  lldb::LockableStreamFileSP m_output_stream_sp;
-  lldb::LockableStreamFileSP m_error_stream_sp;
+  lldb::LockableStreamPairSP m_stream_pair_sp;
   ConnectionFileDescriptor m_input_connection;
 
   IsInputCompleteCallbackType m_is_input_complete_callback;

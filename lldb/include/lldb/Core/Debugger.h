@@ -133,15 +133,27 @@ public:
 
   lldb::FileSP GetInputFileSP() { return m_input_file_sp; }
 
-  lldb::LockableStreamFileSP GetOutputStreamSP() { return m_output_stream_sp; }
+  lldb::LockableStreamFileSP GetOutputStreamSP() {
+    return m_stream_pair_sp->GetOutputStreamSP();
+  }
 
-  lldb::LockableStreamFileSP GetErrorStreamSP() { return m_error_stream_sp; }
+  lldb::LockableStreamFileSP GetErrorStreamSP() {
+    return m_stream_pair_sp->GetErrorStreamSP();
+  }
+
+  lldb::LockableStreamPairSP GetOutputStreamPairSP() {
+    return m_stream_pair_sp;
+  }
 
   File &GetInputFile() { return *m_input_file_sp; }
 
-  File &GetOutputFile() { return m_output_stream_sp->GetUnlockedFile(); }
+  File &GetOutputFile() {
+    return m_stream_pair_sp->GetOutputStreamSP()->GetUnlockedFile();
+  }
 
-  File &GetErrorFile() { return m_error_stream_sp->GetUnlockedFile(); }
+  File &GetErrorFile() {
+    return m_stream_pair_sp->GetErrorStreamSP()->GetUnlockedFile();
+  }
 
   repro::DataRecorder *GetInputRecorder();
 
@@ -202,8 +214,7 @@ public:
   // If any of the streams are not set, set them to the in/out/err stream of
   // the top most input reader to ensure they at least have something
   void AdoptTopIOHandlerFilesIfInvalid(lldb::FileSP &in,
-                                       lldb::LockableStreamFileSP &out,
-                                       lldb::LockableStreamFileSP &err);
+                                       lldb::LockableStreamPairSP &out_pair);
 
   /// Run the given IO handler and return immediately.
   void RunIOHandlerAsync(const lldb::IOHandlerSP &reader_sp,
@@ -687,11 +698,9 @@ protected:
 
   void InstanceInitialize();
 
-  // these should never be NULL
+  /// Should never be NULL.
   lldb::FileSP m_input_file_sp;
-  lldb::LockableStreamFileSP m_output_stream_sp;
-  lldb::LockableStreamFileSP m_error_stream_sp;
-  LockableStreamFile::Mutex m_output_mutex;
+  lldb::LockableStreamPairSP m_stream_pair_sp;
 
   /// Used for shadowing the input file when capturing a reproducer.
   repro::DataRecorder *m_input_recorder;

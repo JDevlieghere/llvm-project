@@ -10,6 +10,7 @@
 #include "lldb/Host/StreamFile.h"
 #include "lldb/lldb-enumerations.h"
 #include "lldb/lldb-forward.h"
+#include <cstddef>
 #include <locale>
 
 #if LLDB_ENABLE_PYTHON
@@ -493,8 +494,9 @@ def function (frame, bp_loc, internal_dict):
   }
 
   if (instructions && interactive) {
-    if (LockableStreamFileSP stream_sp = io_handler.GetOutputStreamFileSP()) {
-      LockedStreamFile locked_stream = stream_sp->Lock();
+    if (LockableStreamPairSP stream_pair_sp =
+            io_handler.GetOutputStreamPairSP()) {
+      LockedStreamFile locked_stream = stream_pair_sp->GetOutputStream().Lock();
       locked_stream.PutCString(instructions);
       locked_stream.Flush();
     }
@@ -530,8 +532,10 @@ void ScriptInterpreterPythonImpl::IOHandlerInputComplete(IOHandler &io_handler,
         bp_options.SetCallback(
             ScriptInterpreterPythonImpl::BreakpointCallbackFunction, baton_sp);
       } else if (!batch_mode) {
-        if (LockableStreamFileSP error_sp = io_handler.GetErrorStreamFileSP()) {
-          LockedStreamFile locked_stream = error_sp->Lock();
+        if (LockableStreamPairSP stream_pair_sp =
+                io_handler.GetOutputStreamPairSP()) {
+          LockedStreamFile locked_stream =
+              stream_pair_sp->GetErrorStream().Lock();
           locked_stream.Printf("Warning: No command attached to breakpoint.\n");
         }
       }
@@ -552,8 +556,10 @@ void ScriptInterpreterPythonImpl::IOHandlerInputComplete(IOHandler &io_handler,
       wp_options->SetCallback(
           ScriptInterpreterPythonImpl::WatchpointCallbackFunction, baton_sp);
     } else if (!batch_mode) {
-      if (LockableStreamFileSP error_sp = io_handler.GetErrorStreamFileSP()) {
-        LockedStreamFile locked_stream = error_sp->Lock();
+      if (LockableStreamPairSP stream_pair_sp =
+              io_handler.GetOutputStreamPairSP()) {
+        LockedStreamFile locked_stream =
+            stream_pair_sp->GetErrorStream().Lock();
         locked_stream.Printf("Warning: No command attached to breakpoint.\n");
       }
     }
@@ -681,10 +687,14 @@ bool ScriptInterpreterPythonImpl::EnterSession(uint16_t on_entry_flags,
   PythonDictionary &sys_module_dict = GetSysModuleDictionary();
   if (sys_module_dict.IsValid()) {
     lldb::FileSP top_in_sp;
-    lldb::LockableStreamFileSP top_out_sp, top_err_sp;
+    lldb::LockableStreamPairSP top_stream_pair_sp;
     if (!in_sp || !out_sp || !err_sp || !*in_sp || !*out_sp || !*err_sp)
-      m_debugger.AdoptTopIOHandlerFilesIfInvalid(top_in_sp, top_out_sp,
-                                                 top_err_sp);
+      m_debugger.AdoptTopIOHandlerFilesIfInvalid(top_in_sp, top_stream_pair_sp);
+
+    lldb::LockableStreamFileSP top_out_sp =
+        top_stream_pair_sp ? top_stream_pair_sp->GetOutputStreamSP() : nullptr;
+    lldb::LockableStreamFileSP top_err_sp =
+        top_stream_pair_sp ? top_stream_pair_sp->GetErrorStreamSP() : nullptr;
 
     if (on_entry_flags & Locker::NoSTDIN) {
       m_saved_stdin.Reset();

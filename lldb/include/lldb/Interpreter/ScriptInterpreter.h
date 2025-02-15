@@ -32,6 +32,7 @@
 #include "lldb/Utility/Broadcaster.h"
 #include "lldb/Utility/Status.h"
 #include "lldb/Utility/StructuredData.h"
+#include "lldb/lldb-forward.h"
 #include "lldb/lldb-private.h"
 #include <optional>
 
@@ -116,11 +117,17 @@ public:
   ~ScriptInterpreterIORedirect();
 
   lldb::FileSP GetInputFile() const { return m_input_file_sp; }
+
   lldb::FileSP GetOutputFile() const {
-    return m_output_file_sp->GetUnlockedFileSP();
+    if (m_stream_pair_sp)
+      return m_stream_pair_sp->GetOutputStream().GetUnlockedFileSP();
+    return nullptr;
   }
+
   lldb::FileSP GetErrorFile() const {
-    return m_error_file_sp->GetUnlockedFileSP();
+    if (m_stream_pair_sp)
+      return m_stream_pair_sp->GetErrorStream().GetUnlockedFileSP();
+    return nullptr;
   }
 
   /// Flush our output and error file handles.
@@ -132,9 +139,7 @@ private:
   ScriptInterpreterIORedirect(Debugger &debugger, CommandReturnObject *result);
 
   lldb::FileSP m_input_file_sp;
-  lldb::LockableStreamFileSP m_output_file_sp;
-  lldb::LockableStreamFileSP m_error_file_sp;
-  LockableStreamFile::Mutex m_output_mutex;
+  lldb::LockableStreamPairSP m_stream_pair_sp;
   ThreadedCommunication m_communication;
   bool m_disconnect;
 };
@@ -246,9 +251,9 @@ public:
     return StructuredData::GenericSP();
   }
 
-  virtual lldb::ValueObjectListSP GetRecognizedArguments(
-      const StructuredData::ObjectSP &implementor,
-      lldb::StackFrameSP frame_sp) {
+  virtual lldb::ValueObjectListSP
+  GetRecognizedArguments(const StructuredData::ObjectSP &implementor,
+                         lldb::StackFrameSP frame_sp) {
     return lldb::ValueObjectListSP();
   }
 
@@ -264,16 +269,13 @@ public:
     return StructuredData::GenericSP();
   }
 
-  virtual bool
-  ScriptedBreakpointResolverSearchCallback(StructuredData::GenericSP implementor_sp,
-                                           SymbolContext *sym_ctx)
-  {
+  virtual bool ScriptedBreakpointResolverSearchCallback(
+      StructuredData::GenericSP implementor_sp, SymbolContext *sym_ctx) {
     return false;
   }
 
-  virtual lldb::SearchDepth
-  ScriptedBreakpointResolverSearchDepth(StructuredData::GenericSP implementor_sp)
-  {
+  virtual lldb::SearchDepth ScriptedBreakpointResolverSearchDepth(
+      StructuredData::GenericSP implementor_sp) {
     return lldb::eSearchDepthModule;
   }
 
@@ -289,8 +291,7 @@ public:
   }
 
   virtual Status GenerateFunction(const char *signature,
-                                  const StringList &input,
-                                  bool is_callback) {
+                                  const StringList &input, bool is_callback) {
     return Status::FromErrorString("not implemented");
   }
 
@@ -411,11 +412,12 @@ public:
     return false;
   }
 
-  virtual bool RunScriptBasedParsedCommand(
-      StructuredData::GenericSP impl_obj_sp, Args& args,
-      ScriptedCommandSynchronicity synchronicity,
-      lldb_private::CommandReturnObject &cmd_retobj, Status &error,
-      const lldb_private::ExecutionContext &exe_ctx) {
+  virtual bool
+  RunScriptBasedParsedCommand(StructuredData::GenericSP impl_obj_sp, Args &args,
+                              ScriptedCommandSynchronicity synchronicity,
+                              lldb_private::CommandReturnObject &cmd_retobj,
+                              Status &error,
+                              const lldb_private::ExecutionContext &exe_ctx) {
     return false;
   }
 
@@ -500,8 +502,8 @@ public:
     return false;
   }
 
-  virtual void OptionParsingStartedForCommandObject(
-      StructuredData::GenericSP cmd_obj_sp) {
+  virtual void
+  OptionParsingStartedForCommandObject(StructuredData::GenericSP cmd_obj_sp) {
     return;
   }
 
@@ -532,8 +534,8 @@ public:
 
   virtual llvm::Expected<unsigned>
   GetMaxPositionalArgumentsForCallable(const llvm::StringRef &callable_name) {
-    return llvm::createStringError(
-    llvm::inconvertibleErrorCode(), "Unimplemented function");
+    return llvm::createStringError(llvm::inconvertibleErrorCode(),
+                                   "Unimplemented function");
   }
 
   static std::string LanguageToString(lldb::ScriptLanguage language);

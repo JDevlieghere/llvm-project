@@ -2844,14 +2844,11 @@ void CommandInterpreter::HandleCommandsFromFile(
 
   // Used for inheriting the right settings when "command source" might
   // have nested "command source" commands
-  lldb::LockableStreamFileSP empty_stream_sp;
   m_command_source_flags.push_back(flags);
   IOHandlerSP io_handler_sp(new IOHandlerEditline(
       debugger, IOHandler::Type::CommandInterpreter, input_file_sp,
-      empty_stream_sp, // Pass in an empty stream so we inherit the top
-                       // input reader output stream
-      empty_stream_sp, // Pass in an empty stream so we inherit the top
-                       // input reader error stream
+      LockableStreamPairSP(), // Pass in an empty stream so we inherit the top
+                              // input reader output and error stream
       flags,
       nullptr, // Pass in NULL for "editline_name" so no history is saved,
                // or written
@@ -3101,9 +3098,9 @@ void CommandInterpreter::PrintCommandOutput(IOHandler &io_handler,
                                             llvm::StringRef str,
                                             bool is_stdout) {
 
-  lldb::LockableStreamFileSP stream = is_stdout
-                                          ? io_handler.GetOutputStreamFileSP()
-                                          : io_handler.GetErrorStreamFileSP();
+  lldb::LockableStreamFileSP stream =
+      is_stdout ? io_handler.GetOutputStreamPairSP()->GetOutputStreamSP()
+                : io_handler.GetOutputStreamPairSP()->GetErrorStreamSP();
   // Split the output into lines and poll for interrupt requests
   bool had_output = !str.empty();
   while (!str.empty()) {
@@ -3163,7 +3160,7 @@ void CommandInterpreter::IOHandlerInputComplete(IOHandler &io_handler,
     // command output and no command...
     if (EchoCommandNonInteractive(line, io_handler.GetFlags())) {
       LockedStreamFile locked_stream =
-          io_handler.GetOutputStreamFileSP()->Lock();
+          io_handler.GetOutputStreamPairSP()->GetOutputStreamSP()->Lock();
       locked_stream.Printf("%s%s\n", io_handler.GetPrompt(), line.c_str());
     }
   }
@@ -3444,8 +3441,8 @@ CommandInterpreter::GetIOHandler(bool force_create,
 
     m_command_io_handler_sp = std::make_shared<IOHandlerEditline>(
         m_debugger, IOHandler::Type::CommandInterpreter,
-        m_debugger.GetInputFileSP(), m_debugger.GetOutputStreamSP(),
-        m_debugger.GetErrorStreamSP(), flags, "lldb", m_debugger.GetPrompt(),
+        m_debugger.GetInputFileSP(), m_debugger.GetOutputStreamPairSP(), flags,
+        "lldb", m_debugger.GetPrompt(),
         llvm::StringRef(), // Continuation prompt
         false, // Don't enable multiple line input, just single line commands
         m_debugger.GetUseColor(),

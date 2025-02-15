@@ -59,8 +59,7 @@ public:
 
   IOHandler(Debugger &debugger, IOHandler::Type type,
             const lldb::FileSP &input_sp,
-            const lldb::LockableStreamFileSP &output_sp,
-            const lldb::LockableStreamFileSP &error_sp, uint32_t flags);
+            const lldb::LockableStreamPairSP &stream_pair_sp, uint32_t flags);
 
   virtual ~IOHandler();
 
@@ -120,9 +119,7 @@ public:
 
   lldb::FileSP GetInputFileSP();
 
-  lldb::LockableStreamFileSP GetOutputStreamFileSP();
-
-  lldb::LockableStreamFileSP GetErrorStreamFileSP();
+  lldb::LockableStreamPairSP GetOutputStreamPairSP();
 
   Debugger &GetDebugger() { return m_debugger; }
 
@@ -158,8 +155,7 @@ public:
 protected:
   Debugger &m_debugger;
   lldb::FileSP m_input_sp;
-  lldb::LockableStreamFileSP m_output_sp;
-  lldb::LockableStreamFileSP m_error_sp;
+  lldb::LockableStreamPairSP m_stream_pair_sp;
   Predicate<bool> m_popped;
   Flags m_flags;
   Type m_type;
@@ -327,8 +323,8 @@ public:
 
   IOHandlerEditline(Debugger &debugger, IOHandler::Type type,
                     const lldb::FileSP &input_sp,
-                    const lldb::LockableStreamFileSP &output_sp,
-                    const lldb::LockableStreamFileSP &error_sp, uint32_t flags,
+                    const lldb::LockableStreamPairSP &stream_pair_sp,
+                    uint32_t flags,
                     const char *editline_name, // Used for saving history files
                     llvm::StringRef prompt, llvm::StringRef continuation_prompt,
                     bool multi_line, bool color,
@@ -342,10 +338,9 @@ public:
                     IOHandlerDelegate &) = delete;
 
   IOHandlerEditline(Debugger &, IOHandler::Type, const lldb::FileSP &,
-                    const lldb::LockableStreamFileSP &,
-                    const lldb::LockableStreamFileSP &, uint32_t, const char *,
-                    const char *, const char *, bool, bool, uint32_t,
-                    IOHandlerDelegate &) = delete;
+                    const lldb::LockableStreamPairSP &stream_pair_sp, uint32_t,
+                    const char *, const char *, const char *, bool, bool,
+                    uint32_t, IOHandlerDelegate &) = delete;
 
   ~IOHandlerEditline() override;
 

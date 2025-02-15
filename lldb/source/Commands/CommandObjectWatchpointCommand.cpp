@@ -173,9 +173,10 @@ are no syntax errors may indicate that a function was declared but never called.
 
   void IOHandlerActivated(IOHandler &io_handler, bool interactive) override {
     if (interactive) {
-      if (lldb::LockableStreamFileSP output_sp =
-              io_handler.GetOutputStreamFileSP()) {
-        LockedStreamFile locked_stream = output_sp->Lock();
+      if (lldb::LockableStreamPairSP stream_pair_sp =
+              io_handler.GetOutputStreamPairSP()) {
+        LockedStreamFile locked_stream =
+            stream_pair_sp->GetOutputStream().Lock();
         locked_stream.PutCString(
             "Enter your debugger command(s).  Type 'DONE' to end.\n");
       }

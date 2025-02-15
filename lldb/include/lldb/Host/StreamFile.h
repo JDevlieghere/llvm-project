@@ -103,6 +103,30 @@ private:
   const LockableStreamFile &operator=(const LockableStreamFile &) = delete;
 };
 
+class LockableStreamPair {
+public:
+  LockableStreamPair();
+  LockableStreamPair(std::unique_ptr<File> file);
+  LockableStreamPair(FILE *fh, bool transfer_ownership);
+
+  lldb::LockableStreamFileSP GetOutputStreamSP() { return m_output_stream_sp; }
+  lldb::LockableStreamFileSP GetErrorStreamSP() { return m_error_stream_sp; }
+
+  LockableStreamFile &GetOutputStream() { return *m_output_stream_sp; }
+  LockableStreamFile &GetErrorStream() { return *m_error_stream_sp; }
+
+  void SetOutputFile(lldb::FileSP file_sp);
+  void SetErrorFile(lldb::FileSP file_sp);
+
+private:
+  /// Should always point to a valid lockable stream.
+  /// @{
+  lldb::LockableStreamFileSP m_output_stream_sp;
+  lldb::LockableStreamFileSP m_error_stream_sp;
+  /// @}
+  LockableStreamFile::Mutex m_mutex;
+};
+
 } // namespace lldb_private
 
 #endif // LLDB_HOST_STREAMFILE_H

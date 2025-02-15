@@ -8,6 +8,7 @@
 
 #include "lldb/Host/Config.h"
 #include "lldb/Host/File.h"
+#include "lldb/lldb-forward.h"
 
 #if LLDB_ENABLE_LIBEDIT
 
@@ -117,16 +118,13 @@ EditlineAdapter::EditlineAdapter()
   if (*_el_secondary_file == nullptr)
     return;
 
-  lldb::LockableStreamFileSP output_stream_sp =
-      std::make_shared<LockableStreamFile>(*_el_secondary_file,
-                                           NativeFile::Unowned, output_mutex);
-  lldb::LockableStreamFileSP error_stream_sp =
-      std::make_shared<LockableStreamFile>(*_el_secondary_file,
-                                           NativeFile::Unowned, output_mutex);
+  lldb::LockableStreamPairSP stream_pair_sp =
+      std::make_shared<LockableStreamPair>(*_el_secondary_file,
+                                           NativeFile::Unowned);
 
   // Create an Editline instance.
   _editline_sp.reset(new lldb_private::Editline(
-      "gtest editor", *_el_secondary_file, output_stream_sp, error_stream_sp,
+      "gtest editor", *_el_secondary_file, stream_pair_sp,
       /*color=*/false));
   _editline_sp->SetPrompt("> ");
 
