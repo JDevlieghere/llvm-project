@@ -4961,6 +4961,10 @@ static void handleNoDebugAttr(Sema &S, Decl *D, const ParsedAttr &AL) {
   D->addAttr(::new (S.Context) NoDebugAttr(S.Context, AL));
 }
 
+static void handleTransparentStepping(Sema &S, Decl *D, const ParsedAttr &AL) {
+  D->addAttr(::new (S.Context) TransparentSteppingAttr(S.Context, AL));
+}
+
 AlwaysInlineAttr *Sema::mergeAlwaysInlineAttr(Decl *D,
                                               const AttributeCommonInfo &CI,
                                               const IdentifierInfo *Ident) {
@@ -7372,6 +7376,9 @@ ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D, const ParsedAttr &AL,
     break;
   case ParsedAttr::AT_NoDebug:
     handleNoDebugAttr(S, D, AL);
+    break;
+  case ParsedAttr::AT_TransparentStepping:
+    handleTransparentStepping(S, D, AL);
     break;
   case ParsedAttr::AT_CmseNSEntry:
     S.ARM().handleCmseNSEntryAttr(D, AL);
