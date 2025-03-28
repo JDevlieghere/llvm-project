@@ -774,11 +774,17 @@ void Module::LookupInfo::Prune(SymbolContextList &sc_list,
   if (m_match_name_after_lookup && m_name) {
     SymbolContext sc;
     size_t i = start_idx;
+    bool trampoline_support_enabled =
+        Target::GetGlobalProperties().GetEnableTrampolineSupport();
     while (i < sc_list.GetSize()) {
       if (!sc_list.GetContextAtIndex(i, sc))
         break;
 
+      bool is_trampoline = trampoline_support_enabled && sc.function &&
+                           sc.function->IsGenericTrampoline();
+
       bool keep_it =
+          !is_trampoline &&
           NameMatchesLookupInfo(sc.GetFunctionName(), sc.GetLanguage());
       if (keep_it)
         ++i;

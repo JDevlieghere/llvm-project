@@ -31,6 +31,8 @@ public:
   // Accessing information about a DIE
   const char *GetMangledName(bool substitute_name_allowed = true) const;
 
+  bool IsGenericTrampoline() const;
+
   const char *GetPubname() const;
 
   using DWARFBaseDIE::GetName;

@@ -216,6 +216,13 @@ const char *DWARFDIE::GetMangledName(bool substitute_name_allowed) const {
     return nullptr;
 }
 
+bool DWARFDIE::IsGenericTrampoline() const {
+  if (IsValid())
+    return m_die->GetIsGenericTrampoline(m_cu);
+  else
+    return false;
+}
+
 const char *DWARFDIE::GetPubname() const {
   if (IsValid())
     return m_die->GetPubname(m_cu);

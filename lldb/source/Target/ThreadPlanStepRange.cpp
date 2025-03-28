@@ -562,3 +562,31 @@ bool ThreadPlanStepRange::IsPlanStale() {
   }
   return false;
 }
+
+bool ThreadPlanStepRange::DoPlanExplainsStop(Event *event_ptr) {
+  // For crashes, breakpoint hits, signals, etc, let the base plan (or some
+  // plan above us) handle the stop.  That way the user can see the stop, step
+  // around, and then when they are done, continue and have their step
+  // complete.  The exception is if we've hit our "run to next branch"
+  // breakpoint. Note, unlike the step in range plan, we don't mark ourselves
+  // complete if we hit an unexplained breakpoint/crash.
+
+  Log *log = GetLog(LLDBLog::Step);
+  StopInfoSP stop_info_sp = GetPrivateStopInfo();
+
+  if (!stop_info_sp)
+    return true;
+
+  StopReason reason = stop_info_sp->GetStopReason();
+
+  if (reason == eStopReasonTrace)
+    return true;
+
+  if (reason == eStopReasonBreakpoint)
+    return NextRangeBreakpointExplainsStop(stop_info_sp);
+
+  if (log)
+    log->PutCString("ThreadPlanStepRange got asked if it explains the "
+                    "stop for some reason other than step.");
+  return false;
+}

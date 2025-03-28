@@ -217,6 +217,15 @@ let Definition = "target" in {
          "launched. If you change this setting, the new value will only apply to "
          "subsequent launches. Commands that take an explicit working directory "
          "will override this setting.">;
+  def EnableTrampolineSupport
+      : Property<"enable-trampoline-support", "Boolean">,
+        Global,
+        DefaultTrue,
+        Desc<"Enable trampoline support in LLDB. Trampoline support includes "
+             "stepping through trampolines directly to their targets, stepping "
+             "out of trampolines directly to their callers, and automatically "
+             "filtering out trampolines as possible breakpoint locations when "
+             "set by name.">;
 }
 
 let Definition = "process_experimental" in {
