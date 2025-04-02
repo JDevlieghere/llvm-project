@@ -38,8 +38,8 @@ class ProgressTesterCommand:
 
         parser.add_option(
             "--total",
-            dest="total",
-            help="Total items in this progress object. When this option is not specified, this will be an indeterminate progress.",
+            dest="total", help="Total items in this progress object. When this
+            option is not specified, this will be an indeterminate progress.",
             type="int",
             default=None,
         )
@@ -88,11 +88,11 @@ class ProgressTesterCommand:
             progress = lldb.SBProgress(
                 "Progress tester", "Initial Detail", total, debugger
             )
-        # Check to see if total is set to None to indicate an indeterminate progress
-        # then default to 10 steps.
+        # Check to see if total is set to None to indicate an indeterminate
+        # progress then default to 3 steps.
         with progress:
             if total is None:
-                total = 10
+                total = 3
 
             for i in range(1, total):
                 if cmd_options.no_details:
