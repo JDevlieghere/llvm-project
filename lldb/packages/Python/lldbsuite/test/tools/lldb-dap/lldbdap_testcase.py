@@ -28,8 +28,8 @@ class DAPTestCaseBase(TestBase):
             env=lldbDAPEnv,
         )
 
-    def build_and_create_debug_adapter(self, lldbDAPEnv=None):
-        self.build()
+    def build_and_create_debug_adapter(self, lldbDAPEnv=None, dictionary=None):
+        self.build(dictionary=dictionary)
         self.create_debug_adapter(lldbDAPEnv)
 
     def set_source_breakpoints(self, source_path, lines, data=None):

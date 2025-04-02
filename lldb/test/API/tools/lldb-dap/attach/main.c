@@ -17,13 +17,10 @@ int main(int argc, char const *argv[]) {
     fputs("\n", f);
     fflush(f);
     fclose(f);
+
+    // Wait for the attach.
+    pause();
   }
 
-  printf("pid = %i\n", getpid());
-#ifdef _WIN32
-  Sleep(10 * 1000);
-#else
-  sleep(10);
-#endif
   return 0; // breakpoint 1
 }
