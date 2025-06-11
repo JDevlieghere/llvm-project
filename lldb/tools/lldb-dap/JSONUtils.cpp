@@ -482,9 +482,9 @@ llvm::json::Object CreateEventObject(const llvm::StringRef event_name) {
   return event;
 }
 
-protocol::ExceptionBreakpointsFilter
+lldb_private::protocol::dap::ExceptionBreakpointsFilter
 CreateExceptionBreakpointFilter(const ExceptionBreakpoint &bp) {
-  protocol::ExceptionBreakpointsFilter filter;
+  lldb_private::protocol::dap::ExceptionBreakpointsFilter filter;
   filter.filter = bp.GetFilter();
   filter.label = bp.GetLabel();
   filter.defaultState = ExceptionBreakpoint::kDefaultValue;

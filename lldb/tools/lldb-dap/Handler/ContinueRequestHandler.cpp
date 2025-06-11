@@ -9,14 +9,14 @@
 #include "DAP.h"
 #include "Handler/RequestHandler.h"
 #include "LLDBUtils.h"
-#include "Protocol/ProtocolRequests.h"
 #include "lldb/API/SBError.h"
 #include "lldb/API/SBProcess.h"
+#include "lldb/Protocol/DAP/ProtocolRequests.h"
 #include "llvm/Support/Error.h"
 
 using namespace llvm;
 using namespace lldb;
-using namespace lldb_dap::protocol;
+using namespace lldb_private::protocol;
 
 namespace lldb_dap {
 
@@ -26,8 +26,8 @@ namespace lldb_dap {
 /// argument to true resumes only the specified thread. If not all threads were
 /// resumed, the `allThreadsContinued` attribute of the response should be set
 /// to false.
-Expected<ContinueResponseBody>
-ContinueRequestHandler::Run(const ContinueArguments &args) const {
+Expected<dap::ContinueResponseBody>
+ContinueRequestHandler::Run(const dap::ContinueArguments &args) const {
   SBProcess process = dap.target.GetProcess();
   SBError error;
 
@@ -42,7 +42,7 @@ ContinueRequestHandler::Run(const ContinueArguments &args) const {
   if (error.Fail())
     return ToError(error);
 
-  ContinueResponseBody body;
+  dap::ContinueResponseBody body;
   body.allThreadsContinued = !args.singleThread;
   return body;
 }

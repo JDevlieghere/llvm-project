@@ -7,9 +7,9 @@
 //===----------------------------------------------------------------------===//
 
 #include "DAP.h"
-#include "Protocol/ProtocolBase.h"
 #include "TestBase.h"
 #include "Transport.h"
+#include "lldb/Protocol/DAP/ProtocolBase.h"
 #include "llvm/Testing/Support/Error.h"
 #include "gtest/gtest.h"
 #include <chrono>
@@ -20,7 +20,7 @@ using namespace llvm;
 using namespace lldb;
 using namespace lldb_dap;
 using namespace lldb_dap_tests;
-using namespace lldb_dap::protocol;
+using namespace lldb_private::protocol::dap;
 
 class DAPTest : public TransportBase {};
 

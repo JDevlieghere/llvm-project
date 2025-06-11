@@ -9,10 +9,11 @@
 #include "DAP.h"
 #include "RequestHandler.h"
 
-using namespace lldb_dap::protocol;
+using namespace lldb_private::protocol;
+
 namespace lldb_dap {
 
-/// Creates a `protocol::Scope` struct.
+/// Creates a `protocol::dap::Scope` struct.
 ///
 ///
 /// \param[in] name
@@ -28,10 +29,11 @@ namespace lldb_dap {
 ///     The value to place into the "expensive" key
 ///
 /// \return
-///     A `protocol::Scope`
-static Scope CreateScope(const llvm::StringRef name, int64_t variablesReference,
-                         int64_t namedVariables, bool expensive) {
-  Scope scope;
+///     A `protocol::dap::Scope`
+static dap::Scope CreateScope(const llvm::StringRef name,
+                              int64_t variablesReference,
+                              int64_t namedVariables, bool expensive) {
+  dap::Scope scope;
   scope.name = name;
 
   // TODO: Support "arguments" and "return value" scope.
@@ -42,9 +44,9 @@ static Scope CreateScope(const llvm::StringRef name, int64_t variablesReference,
   // be expanded if we enter a function with arguments. It becomes more
   // annoying when the scope has arguments, return_value and locals.
   if (variablesReference == VARREF_LOCALS)
-    scope.presentationHint = Scope::eScopePresentationHintLocals;
+    scope.presentationHint = dap::Scope::eScopePresentationHintLocals;
   else if (variablesReference == VARREF_REGS)
-    scope.presentationHint = Scope::eScopePresentationHintRegisters;
+    scope.presentationHint = dap::Scope::eScopePresentationHintRegisters;
 
   scope.variablesReference = variablesReference;
   scope.namedVariables = namedVariables;
@@ -53,8 +55,8 @@ static Scope CreateScope(const llvm::StringRef name, int64_t variablesReference,
   return scope;
 }
 
-llvm::Expected<ScopesResponseBody>
-ScopesRequestHandler::Run(const ScopesArguments &args) const {
+llvm::Expected<dap::ScopesResponseBody>
+ScopesRequestHandler::Run(const dap::ScopesArguments &args) const {
   lldb::SBFrame frame = dap.GetLLDBFrame(args.frameId);
 
   // As the user selects different stack frames in the GUI, a "scopes" request
@@ -92,7 +94,7 @@ ScopesRequestHandler::Run(const ScopesArguments &args) const {
                         CreateScope("Registers", VARREF_REGS,
                                     dap.variables.registers.GetSize(), false)};
 
-  return ScopesResponseBody{std::move(scopes)};
+  return dap::ScopesResponseBody{std::move(scopes)};
 }
 
 } // namespace lldb_dap

@@ -12,7 +12,7 @@
 
 #include "Breakpoint.h"
 #include "DAPForward.h"
-#include "Protocol/ProtocolTypes.h"
+#include "lldb/Protocol/DAP/ProtocolTypes.h"
 #include "lldb/lldb-types.h"
 #include <cstdint>
 
@@ -21,8 +21,9 @@ namespace lldb_dap {
 /// Instruction Breakpoint
 class InstructionBreakpoint : public Breakpoint {
 public:
-  InstructionBreakpoint(DAP &d,
-                        const protocol::InstructionBreakpoint &breakpoint);
+  InstructionBreakpoint(
+      DAP &d,
+      const lldb_private::protocol::dap::InstructionBreakpoint &breakpoint);
 
   /// Set instruction breakpoint in LLDB as a new breakpoint.
   void SetBreakpoint();

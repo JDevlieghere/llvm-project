@@ -11,9 +11,9 @@
 #include "DAPError.h"
 #include "JSONUtils.h"
 #include "LLDBUtils.h"
-#include "Protocol/ProtocolEvents.h"
-#include "Protocol/ProtocolTypes.h"
 #include "lldb/API/SBFileSpec.h"
+#include "lldb/Protocol/DAP/ProtocolEvents.h"
+#include "lldb/Protocol/DAP/ProtocolTypes.h"
 #include "llvm/Support/Error.h"
 
 #if defined(_WIN32)
@@ -42,16 +42,16 @@ void SendTargetBasedCapabilities(DAP &dap) {
   if (!dap.target.IsValid())
     return;
 
-  protocol::CapabilitiesEventBody body;
+  lldb_private::protocol::dap::CapabilitiesEventBody body;
 
   // We only support restarting launch requests not attach requests.
   if (dap.last_launch_request)
     body.capabilities.supportedFeatures.insert(
-        protocol::eAdapterFeatureRestartRequest);
+        lldb_private::protocol::dap::eAdapterFeatureRestartRequest);
 
   // Only notify the client if supportedFeatures changed.
   if (!body.capabilities.supportedFeatures.empty())
-    dap.Send(protocol::Event{"capabilities", body});
+    dap.Send(lldb_private::protocol::dap::Event{"capabilities", body});
 }
 
 // "ProcessEvent": {

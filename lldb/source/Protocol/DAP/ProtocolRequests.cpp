@@ -6,7 +6,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "Protocol/ProtocolRequests.h"
+#include "lldb/Protocol/DAP/ProtocolRequests.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/StringRef.h"
@@ -138,7 +138,7 @@ parseSourceMap(const json::Value &Params,
   return false;
 }
 
-namespace lldb_dap::protocol {
+namespace lldb_private::protocol::dap {
 
 bool fromJSON(const json::Value &Params, CancelArguments &CA, json::Path P) {
   json::ObjectMapper O(Params, P);
@@ -456,4 +456,4 @@ json::Value toJSON(const DisassembleResponseBody &DRB) {
   return json::Object{{"instructions", DRB.instructions}};
 }
 
-} // namespace lldb_dap::protocol
+} // namespace lldb_private::protocol::dap

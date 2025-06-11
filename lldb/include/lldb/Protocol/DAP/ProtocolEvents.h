@@ -17,13 +17,13 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLDB_TOOLS_LLDB_DAP_PROTOCOL_PROTOCOL_EVENTS_H
-#define LLDB_TOOLS_LLDB_DAP_PROTOCOL_PROTOCOL_EVENTS_H
+#ifndef LLDB_PROTOCOL_DAP_PROTOCOL_EVENTS_H
+#define LLDB_PROTOCOL_DAP_PROTOCOL_EVENTS_H
 
-#include "Protocol/ProtocolTypes.h"
+#include "lldb/Protocol/DAP/ProtocolTypes.h"
 #include "llvm/Support/JSON.h"
 
-namespace lldb_dap::protocol {
+namespace lldb_private::protocol::dap {
 
 /// The event indicates that one or more capabilities have changed.
 ///
@@ -41,6 +41,6 @@ struct CapabilitiesEventBody {
 };
 llvm::json::Value toJSON(const CapabilitiesEventBody &);
 
-} // end namespace lldb_dap::protocol
+} // namespace lldb_private::protocol::dap
 
 #endif

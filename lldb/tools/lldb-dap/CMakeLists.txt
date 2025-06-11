@@ -66,17 +66,13 @@ add_lldb_library(lldbDAP
   Handler/ThreadsRequestHandler.cpp
   Handler/VariablesRequestHandler.cpp
 
-  Protocol/ProtocolBase.cpp
-  Protocol/ProtocolEvents.cpp
-  Protocol/ProtocolTypes.cpp
-  Protocol/ProtocolRequests.cpp
-
   LINK_COMPONENTS
     Option
     Support
   LINK_LIBS
     liblldb
     lldbHost
+    lldbProtocolDAP
   )
 
 target_include_directories(lldbDAP

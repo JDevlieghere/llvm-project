@@ -8,8 +8,8 @@
 
 #include "DAP.h"
 #include "Handler/RequestHandler.h"
-#include "Protocol/ProtocolRequests.h"
 #include "TestBase.h"
+#include "lldb/Protocol/DAP/ProtocolRequests.h"
 #include "llvm/Testing/Support/Error.h"
 #include "gtest/gtest.h"
 
@@ -17,7 +17,7 @@ using namespace llvm;
 using namespace lldb;
 using namespace lldb_dap;
 using namespace lldb_dap_tests;
-using namespace lldb_dap::protocol;
+using namespace lldb_private::protocol::dap;
 
 class ContinueRequestHandlerTest : public DAPTestBase {};
 

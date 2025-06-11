@@ -11,7 +11,7 @@
 #include "JSONUtils.h"
 #include "RequestHandler.h"
 
-using namespace lldb_dap::protocol;
+using namespace lldb_private::protocol;
 
 namespace lldb_dap {
 
@@ -22,8 +22,8 @@ namespace lldb_dap {
 /// If a debug adapter implements both `setVariable` and `setExpression`,
 /// a client will only use `setExpression` if the variable has an evaluateName
 /// property.
-llvm::Expected<SetVariableResponseBody>
-SetVariableRequestHandler::Run(const SetVariableArguments &args) const {
+llvm::Expected<dap::SetVariableResponseBody>
+SetVariableRequestHandler::Run(const dap::SetVariableArguments &args) const {
   const auto args_name = llvm::StringRef(args.name);
 
   if (args.variablesReference == UINT64_MAX) {
@@ -52,7 +52,7 @@ SetVariableRequestHandler::Run(const SetVariableArguments &args) const {
   VariableDescription desc(variable,
                            dap.configuration.enableAutoVariableSummaries);
 
-  SetVariableResponseBody body;
+  dap::SetVariableResponseBody body;
   body.value = desc.display_value;
   body.type = desc.display_type_name;
 

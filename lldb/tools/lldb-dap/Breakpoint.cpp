@@ -20,6 +20,7 @@
 #include <string>
 
 using namespace lldb_dap;
+using namespace lldb_private::protocol;
 
 void Breakpoint::SetCondition() { m_bp.SetCondition(m_condition.c_str()); }
 
@@ -29,8 +30,8 @@ void Breakpoint::SetHitCondition() {
     m_bp.SetIgnoreCount(hitCount - 1);
 }
 
-protocol::Breakpoint Breakpoint::ToProtocolBreakpoint() {
-  protocol::Breakpoint breakpoint;
+dap::Breakpoint Breakpoint::ToProtocolBreakpoint() {
+  dap::Breakpoint breakpoint;
 
   // Each breakpoint location is treated as a separate breakpoint for VS code.
   // They don't have the notion of a single breakpoint with multiple locations.

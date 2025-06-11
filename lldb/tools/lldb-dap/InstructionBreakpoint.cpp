@@ -16,7 +16,8 @@
 namespace lldb_dap {
 
 InstructionBreakpoint::InstructionBreakpoint(
-    DAP &d, const protocol::InstructionBreakpoint &breakpoint)
+    DAP &d,
+    const lldb_private::protocol::dap::InstructionBreakpoint &breakpoint)
     : Breakpoint(d, breakpoint.condition, breakpoint.hitCondition),
       m_instruction_address_reference(LLDB_INVALID_ADDRESS),
       m_offset(breakpoint.offset.value_or(0)) {

@@ -11,13 +11,15 @@
 
 #include "Breakpoint.h"
 #include "DAPForward.h"
-#include "Protocol/ProtocolTypes.h"
+#include "lldb/Protocol/DAP/ProtocolTypes.h"
 
 namespace lldb_dap {
 
 class FunctionBreakpoint : public Breakpoint {
 public:
-  FunctionBreakpoint(DAP &dap, const protocol::FunctionBreakpoint &breakpoint);
+  FunctionBreakpoint(
+      DAP &dap,
+      const lldb_private::protocol::dap::FunctionBreakpoint &breakpoint);
 
   /// Set this breakpoint in LLDB as a new breakpoint.
   void SetBreakpoint();

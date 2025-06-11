@@ -18,7 +18,8 @@
 #include "lldb/Host/PosixApi.h" // Adds PATH_MAX for windows
 #include <optional>
 
-using namespace lldb_dap::protocol;
+using namespace lldb_private::protocol;
+
 namespace lldb_dap {
 
 static bool ShouldDisplayAssemblySource(
@@ -46,9 +47,9 @@ static bool ShouldDisplayAssemblySource(
   return false;
 }
 
-static protocol::Source CreateAssemblySource(const lldb::SBTarget &target,
-                                             lldb::SBAddress address) {
-  protocol::Source source;
+static dap::Source CreateAssemblySource(const lldb::SBTarget &target,
+                                        lldb::SBAddress address) {
+  dap::Source source;
 
   auto symbol = address.GetSymbol();
   std::string name;
@@ -76,13 +77,13 @@ static protocol::Source CreateAssemblySource(const lldb::SBTarget &target,
   // Mark the source as deemphasized since users will only be able to view
   // assembly for these frames.
   source.presentationHint =
-      protocol::Source::PresentationHint::eSourcePresentationHintDeemphasize;
+      dap::Source::PresentationHint::eSourcePresentationHintDeemphasize;
 
   return source;
 }
 
-protocol::Source CreateSource(const lldb::SBFileSpec &file) {
-  protocol::Source source;
+dap::Source CreateSource(const lldb::SBFileSpec &file) {
+  dap::Source source;
   if (file.IsValid()) {
     if (const char *name = file.GetFilename())
       source.name = name;
@@ -94,7 +95,7 @@ protocol::Source CreateSource(const lldb::SBFileSpec &file) {
   return source;
 }
 
-protocol::Source CreateSource(lldb::SBAddress address, lldb::SBTarget &target) {
+dap::Source CreateSource(lldb::SBAddress address, lldb::SBTarget &target) {
   lldb::SBDebugger debugger = target.GetDebugger();
   lldb::StopDisassemblyType stop_disassembly_display =
       GetStopDisassemblyDisplay(debugger);
@@ -105,7 +106,7 @@ protocol::Source CreateSource(lldb::SBAddress address, lldb::SBTarget &target) {
   return CreateSource(line_entry.GetFileSpec());
 }
 
-bool IsAssemblySource(const protocol::Source &source) {
+bool IsAssemblySource(const dap::Source &source) {
   // According to the specification, a source must have either `path` or
   // `sourceReference` specified. We use `path` for sources with known source
   // code, and `sourceReferences` when falling back to assembly.
@@ -116,7 +117,7 @@ std::string GetLoadAddressString(const lldb::addr_t addr) {
   return "0x" + llvm::utohexstr(addr, false, 16);
 }
 
-protocol::Thread CreateThread(lldb::SBThread &thread, lldb::SBFormat &format) {
+dap::Thread CreateThread(lldb::SBThread &thread, lldb::SBFormat &format) {
   std::string name;
   lldb::SBStream stream;
   if (format && thread.GetDescriptionWithFormat(format, stream).Success()) {
@@ -142,15 +143,15 @@ protocol::Thread CreateThread(lldb::SBThread &thread, lldb::SBFormat &format) {
       name = llvm::formatv("Thread {0}", thread.GetIndexID()).str();
     }
   }
-  return protocol::Thread{thread.GetThreadID(), name};
+  return dap::Thread{thread.GetThreadID(), name};
 }
 
-std::vector<protocol::Thread> GetThreads(lldb::SBProcess process,
-                                         lldb::SBFormat &format) {
+std::vector<dap::Thread> GetThreads(lldb::SBProcess process,
+                                    lldb::SBFormat &format) {
   lldb::SBMutex lock = process.GetTarget().GetAPIMutex();
   std::lock_guard<lldb::SBMutex> guard(lock);
 
-  std::vector<protocol::Thread> threads;
+  std::vector<dap::Thread> threads;
 
   const uint32_t num_threads = process.GetNumThreads();
   threads.reserve(num_threads);

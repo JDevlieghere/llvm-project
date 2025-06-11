@@ -17,8 +17,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLDB_TOOLS_LLDB_DAP_PROTOCOL_PROTOCOL_BASE_H
-#define LLDB_TOOLS_LLDB_DAP_PROTOCOL_PROTOCOL_BASE_H
+#ifndef LLDB_PROTOCOL_DAP_PROTOCOL_BASE_H
+#define LLDB_PROTOCOL_DAP_PROTOCOL_BASE_H
 
 #include "llvm/Support/JSON.h"
 #include <cstdint>
@@ -26,7 +26,7 @@
 #include <string>
 #include <variant>
 
-namespace lldb_dap::protocol {
+namespace lldb_private::protocol::dap {
 
 // MARK: Base Protocol
 
@@ -159,6 +159,6 @@ using EmptyArguments = std::optional<std::monostate>;
 /// This is just an acknowledgement, so no body field is required.
 using VoidResponse = llvm::Error;
 
-} // namespace lldb_dap::protocol
+} // namespace lldb_private::protocol::dap
 
 #endif

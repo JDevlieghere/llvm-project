@@ -6,8 +6,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "Protocol/ProtocolTypes.h"
-#include "JSONUtils.h"
+#include "lldb/Protocol/DAP/ProtocolTypes.h"
 #include "lldb/lldb-types.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringRef.h"
@@ -17,7 +16,19 @@
 
 using namespace llvm;
 
-namespace lldb_dap::protocol {
+static std::optional<lldb::addr_t>
+DecodeMemoryReference(llvm::StringRef memory_reference) {
+  if (!memory_reference.starts_with("0x"))
+    return std::nullopt;
+
+  lldb::addr_t addr;
+  if (memory_reference.consumeInteger(0, addr))
+    return std::nullopt;
+
+  return addr;
+}
+
+namespace lldb_private::protocol::dap {
 
 bool fromJSON(const json::Value &Params, Source::PresentationHint &PH,
               json::Path P) {
@@ -884,4 +895,4 @@ llvm::json::Value toJSON(const DisassembledInstruction &DI) {
   return result;
 }
 
-} // namespace lldb_dap::protocol
+} // namespace lldb_private::protocol::dap

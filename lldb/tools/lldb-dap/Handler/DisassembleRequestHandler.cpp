@@ -10,29 +10,29 @@
 #include "EventHelper.h"
 #include "JSONUtils.h"
 #include "LLDBUtils.h"
-#include "Protocol/ProtocolRequests.h"
-#include "Protocol/ProtocolTypes.h"
 #include "ProtocolUtils.h"
 #include "RequestHandler.h"
 #include "lldb/API/SBAddress.h"
 #include "lldb/API/SBInstruction.h"
 #include "lldb/API/SBLineEntry.h"
 #include "lldb/API/SBTarget.h"
+#include "lldb/Protocol/DAP/ProtocolRequests.h"
+#include "lldb/Protocol/DAP/ProtocolTypes.h"
 #include "lldb/lldb-types.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/Error.h"
 #include <cstdint>
 #include <optional>
 
-using namespace lldb_dap::protocol;
+using namespace lldb_private::protocol;
 
 namespace lldb_dap {
 
-static protocol::DisassembledInstruction GetInvalidInstruction() {
-  DisassembledInstruction invalid_inst;
+static dap::DisassembledInstruction GetInvalidInstruction() {
+  dap::DisassembledInstruction invalid_inst;
   invalid_inst.address = LLDB_INVALID_ADDRESS;
-  invalid_inst.presentationHint =
-      DisassembledInstruction::eDisassembledInstructionPresentationHintInvalid;
+  invalid_inst.presentationHint = dap::DisassembledInstruction::
+      eDisassembledInstructionPresentationHintInvalid;
   return invalid_inst;
 }
 
@@ -84,8 +84,10 @@ static lldb::SBAddress GetDisassembleStartAddress(lldb::SBTarget target,
       .GetAddress();
 }
 
-static DisassembledInstruction ConvertSBInstructionToDisassembledInstruction(
-    lldb::SBTarget &target, lldb::SBInstruction &inst, bool resolve_symbols) {
+static dap::DisassembledInstruction
+ConvertSBInstructionToDisassembledInstruction(lldb::SBTarget &target,
+                                              lldb::SBInstruction &inst,
+                                              bool resolve_symbols) {
   if (!inst.IsValid())
     return GetInvalidInstruction();
 
@@ -112,7 +114,7 @@ static DisassembledInstruction ConvertSBInstructionToDisassembledInstruction(
       sb << llvm::format("%2.2x ", b);
   }
 
-  DisassembledInstruction disassembled_inst;
+  dap::DisassembledInstruction disassembled_inst;
   disassembled_inst.address = inst_addr;
   disassembled_inst.instructionBytes =
       bytes.size() > 0 ? bytes.substr(0, bytes.size() - 1) : "";
@@ -142,7 +144,7 @@ static DisassembledInstruction ConvertSBInstructionToDisassembledInstruction(
 
   disassembled_inst.instruction = std::move(instruction);
 
-  protocol::Source source = CreateSource(addr, target);
+  dap::Source source = CreateSource(addr, target);
   lldb::SBLineEntry line_entry = GetLineEntryForAddress(target, addr);
 
   // If the line number is 0 then the entry represents a compiler generated
@@ -183,8 +185,8 @@ static DisassembledInstruction ConvertSBInstructionToDisassembledInstruction(
 /// Disassembles code stored at the provided location.
 /// Clients should only call this request if the corresponding capability
 /// `supportsDisassembleRequest` is true.
-llvm::Expected<DisassembleResponseBody>
-DisassembleRequestHandler::Run(const DisassembleArguments &args) const {
+llvm::Expected<dap::DisassembleResponseBody>
+DisassembleRequestHandler::Run(const dap::DisassembleArguments &args) const {
   std::optional<lldb::addr_t> addr_opt =
       DecodeMemoryReference(args.memoryReference);
   if (!addr_opt.has_value())
@@ -217,7 +219,7 @@ DisassembleRequestHandler::Run(const DisassembleArguments &args) const {
 
   // Conver the found instructions to the DAP format.
   const bool resolve_symbols = args.resolveSymbols.value_or(false);
-  std::vector<DisassembledInstruction> instructions;
+  std::vector<dap::DisassembledInstruction> instructions;
   size_t original_address_index = args.instructionCount;
   for (size_t i = 0; i < insts.GetSize(); ++i) {
     lldb::SBInstruction inst = insts.GetInstructionAtIndex(i);
@@ -236,7 +238,7 @@ DisassembleRequestHandler::Run(const DisassembleArguments &args) const {
       // We don't have enough instructions before the main address as was
       // requested. Let's pad the start of the instructions with invalid
       // instructions.
-      std::vector<DisassembledInstruction> invalid_instructions(
+      std::vector<dap::DisassembledInstruction> invalid_instructions(
           backwards_instructions_count - original_address_index,
           GetInvalidInstruction());
       instructions.insert(instructions.begin(), invalid_instructions.begin(),
@@ -253,7 +255,7 @@ DisassembleRequestHandler::Run(const DisassembleArguments &args) const {
     instructions.push_back(GetInvalidInstruction());
   }
 
-  return DisassembleResponseBody{std::move(instructions)};
+  return dap::DisassembleResponseBody{std::move(instructions)};
 }
 
 } // namespace lldb_dap

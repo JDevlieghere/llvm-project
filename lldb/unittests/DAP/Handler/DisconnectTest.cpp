@@ -8,9 +8,9 @@
 
 #include "DAP.h"
 #include "Handler/RequestHandler.h"
-#include "Protocol/ProtocolBase.h"
 #include "TestBase.h"
 #include "lldb/API/SBDefines.h"
+#include "lldb/Protocol/DAP/ProtocolBase.h"
 #include "lldb/lldb-enumerations.h"
 #include "llvm/Testing/Support/Error.h"
 #include "gmock/gmock.h"
@@ -22,7 +22,7 @@ using namespace llvm;
 using namespace lldb;
 using namespace lldb_dap;
 using namespace lldb_dap_tests;
-using namespace lldb_dap::protocol;
+using namespace lldb_private::protocol::dap;
 
 class DisconnectRequestHandlerTest : public DAPTestBase {};
 

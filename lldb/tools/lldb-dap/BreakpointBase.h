@@ -10,7 +10,7 @@
 #define LLDB_TOOLS_LLDB_DAP_BREAKPOINTBASE_H
 
 #include "DAPForward.h"
-#include "Protocol/ProtocolTypes.h"
+#include "lldb/Protocol/DAP/ProtocolTypes.h"
 #include <optional>
 #include <string>
 
@@ -25,7 +25,7 @@ public:
 
   virtual void SetCondition() = 0;
   virtual void SetHitCondition() = 0;
-  virtual protocol::Breakpoint ToProtocolBreakpoint() = 0;
+  virtual lldb_private::protocol::dap::Breakpoint ToProtocolBreakpoint() = 0;
 
   void UpdateBreakpoint(const BreakpointBase &request_bp);
 

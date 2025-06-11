@@ -15,7 +15,7 @@
 #define LLDB_TOOLS_LLDB_DAP_TRANSPORT_H
 
 #include "DAPForward.h"
-#include "Protocol/ProtocolBase.h"
+#include "lldb/Protocol/DAP/ProtocolBase.h"
 #include "lldb/lldb-forward.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/Error.h"
@@ -67,7 +67,7 @@ public:
   /// @}
 
   /// Writes a Debug Adater Protocol message to the output stream.
-  llvm::Error Write(const protocol::Message &M);
+  llvm::Error Write(const lldb_private::protocol::dap::Message &M);
 
   /// Reads the next Debug Adater Protocol message from the input stream.
   ///
@@ -77,7 +77,7 @@ public:
   ///     read.
   ///
   /// \returns Returns the next protocol message.
-  llvm::Expected<protocol::Message>
+  llvm::Expected<lldb_private::protocol::dap::Message>
   Read(const std::chrono::microseconds &timeout);
 
   /// Returns the name of this transport client, for example `stdin/stdout` or

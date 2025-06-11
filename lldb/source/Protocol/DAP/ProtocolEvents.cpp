@@ -6,15 +6,15 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "Protocol/ProtocolEvents.h"
+#include "lldb/Protocol/DAP/ProtocolEvents.h"
 #include "llvm/Support/JSON.h"
 
 using namespace llvm;
 
-namespace lldb_dap::protocol {
+namespace lldb_private::protocol::dap {
 
 json::Value toJSON(const CapabilitiesEventBody &CEB) {
   return json::Object{{"capabilities", CEB.capabilities}};
 }
 
-} // namespace lldb_dap::protocol
+} // namespace lldb_private::protocol::dap

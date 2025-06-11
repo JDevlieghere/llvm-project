@@ -13,7 +13,7 @@
 #ifndef LLDB_TOOLS_LLDB_DAP_PROTOCOL_PROTOCOL_UTILS_H
 #define LLDB_TOOLS_LLDB_DAP_PROTOCOL_PROTOCOL_UTILS_H
 
-#include "Protocol/ProtocolTypes.h"
+#include "lldb/Protocol/DAP/ProtocolTypes.h"
 
 #include "lldb/API/SBAddress.h"
 
@@ -27,7 +27,7 @@ namespace lldb_dap {
 /// \return
 ///     A "Source" JSON object that follows the formal JSON
 ///     definition outlined by Microsoft.
-protocol::Source CreateSource(const lldb::SBFileSpec &file);
+lldb_private::protocol::dap::Source CreateSource(const lldb::SBFileSpec &file);
 
 /// Create a "Source" JSON object as described in the debug adapter definition.
 ///
@@ -40,10 +40,11 @@ protocol::Source CreateSource(const lldb::SBFileSpec &file);
 /// \return
 ///     A "Source" JSON object that follows the formal JSON
 ///     definition outlined by Microsoft.
-protocol::Source CreateSource(lldb::SBAddress address, lldb::SBTarget &target);
+lldb_private::protocol::dap::Source CreateSource(lldb::SBAddress address,
+                                                 lldb::SBTarget &target);
 
 /// Checks if the given source is for assembly code.
-bool IsAssemblySource(const protocol::Source &source);
+bool IsAssemblySource(const lldb_private::protocol::dap::Source &source);
 
 /// Get the address as a 16-digit hex string, e.g. "0x0000000000012345"
 std::string GetLoadAddressString(const lldb::addr_t addr);
@@ -68,11 +69,12 @@ std::string GetLoadAddressString(const lldb::addr_t addr);
 /// \return
 ///     A "Thread" JSON object with that follows the formal JSON
 ///     definition outlined by Microsoft.
-protocol::Thread CreateThread(lldb::SBThread &thread, lldb::SBFormat &format);
+lldb_private::protocol::dap::Thread CreateThread(lldb::SBThread &thread,
+                                                 lldb::SBFormat &format);
 
 /// Returns the set of threads associated with the process.
-std::vector<protocol::Thread> GetThreads(lldb::SBProcess process,
-                                         lldb::SBFormat &format);
+std::vector<lldb_private::protocol::dap::Thread>
+GetThreads(lldb::SBProcess process, lldb::SBFormat &format);
 
 } // namespace lldb_dap
 

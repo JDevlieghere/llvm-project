@@ -11,8 +11,8 @@
 
 #include "Breakpoint.h"
 #include "DAPForward.h"
-#include "Protocol/ProtocolTypes.h"
 #include "lldb/API/SBError.h"
+#include "lldb/Protocol/DAP/ProtocolTypes.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/Error.h"
 #include <cstdint>
@@ -23,10 +23,11 @@ namespace lldb_dap {
 
 class SourceBreakpoint : public Breakpoint {
 public:
-  SourceBreakpoint(DAP &d, const protocol::SourceBreakpoint &breakpoint);
+  SourceBreakpoint(
+      DAP &d, const lldb_private::protocol::dap::SourceBreakpoint &breakpoint);
 
   // Set this breakpoint in LLDB as a new breakpoint
-  llvm::Error SetBreakpoint(const protocol::Source &source);
+  llvm::Error SetBreakpoint(const lldb_private::protocol::dap::Source &source);
   void UpdateBreakpoint(const SourceBreakpoint &request_bp);
 
   void SetLogMessage();

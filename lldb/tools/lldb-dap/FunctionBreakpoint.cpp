@@ -11,10 +11,12 @@
 #include "lldb/API/SBMutex.h"
 #include <mutex>
 
+using namespace lldb_private::protocol;
+
 namespace lldb_dap {
 
 FunctionBreakpoint::FunctionBreakpoint(
-    DAP &d, const protocol::FunctionBreakpoint &breakpoint)
+    DAP &d, const dap::FunctionBreakpoint &breakpoint)
     : Breakpoint(d, breakpoint.condition, breakpoint.hitCondition),
       m_function_name(breakpoint.name) {}
 

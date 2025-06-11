@@ -8,10 +8,12 @@
 
 #include "DAP.h"
 #include "EventHelper.h"
-#include "Protocol/ProtocolRequests.h"
 #include "RequestHandler.h"
 #include "Watchpoint.h"
+#include "lldb/Protocol/DAP/ProtocolRequests.h"
 #include <set>
+
+using namespace lldb_private::protocol;
 
 namespace lldb_dap {
 
@@ -20,10 +22,10 @@ namespace lldb_dap {
 /// When a data breakpoint is hit, a stopped event (with reason data breakpoint)
 /// is generated. Clients should only call this request if the corresponding
 /// capability supportsDataBreakpoints is true.
-llvm::Expected<protocol::SetDataBreakpointsResponseBody>
+llvm::Expected<dap::SetDataBreakpointsResponseBody>
 SetDataBreakpointsRequestHandler::Run(
-    const protocol::SetDataBreakpointsArguments &args) const {
-  std::vector<protocol::Breakpoint> response_breakpoints;
+    const dap::SetDataBreakpointsArguments &args) const {
+  std::vector<dap::Breakpoint> response_breakpoints;
 
   dap.target.DeleteAllWatchpoints();
   std::vector<Watchpoint> watchpoints;
@@ -43,8 +45,7 @@ SetDataBreakpointsRequestHandler::Run(
   for (auto wp : watchpoints)
     response_breakpoints.push_back(wp.ToProtocolBreakpoint());
 
-  return protocol::SetDataBreakpointsResponseBody{
-      std::move(response_breakpoints)};
+  return dap::SetDataBreakpointsResponseBody{std::move(response_breakpoints)};
 }
 
 } // namespace lldb_dap

@@ -9,8 +9,6 @@
 #include "DAP.h"
 #include "Handler/RequestHandler.h"
 #include "LLDBUtils.h"
-#include "Protocol/ProtocolRequests.h"
-#include "Protocol/ProtocolTypes.h"
 #include "lldb/API/SBAddress.h"
 #include "lldb/API/SBExecutionContext.h"
 #include "lldb/API/SBFrame.h"
@@ -20,15 +18,19 @@
 #include "lldb/API/SBSymbol.h"
 #include "lldb/API/SBTarget.h"
 #include "lldb/API/SBThread.h"
+#include "lldb/Protocol/DAP/ProtocolRequests.h"
+#include "lldb/Protocol/DAP/ProtocolTypes.h"
 #include "lldb/lldb-types.h"
 #include "llvm/Support/Error.h"
+
+using namespace lldb_private::protocol;
 
 namespace lldb_dap {
 
 /// Source request; value of command field is 'source'. The request retrieves
 /// the source code for a given source reference.
-llvm::Expected<protocol::SourceResponseBody>
-SourceRequestHandler::Run(const protocol::SourceArguments &args) const {
+llvm::Expected<dap::SourceResponseBody>
+SourceRequestHandler::Run(const dap::SourceArguments &args) const {
   const auto source =
       args.source->sourceReference.value_or(args.sourceReference);
 
@@ -55,8 +57,8 @@ SourceRequestHandler::Run(const protocol::SourceArguments &args) const {
     insts.GetDescription(stream, exe_ctx);
   }
 
-  return protocol::SourceResponseBody{/*content=*/stream.GetData(),
-                                      /*mimeType=*/"text/x-lldb.disassembly"};
+  return dap::SourceResponseBody{/*content=*/stream.GetData(),
+                                 /*mimeType=*/"text/x-lldb.disassembly"};
 }
 
 } // namespace lldb_dap

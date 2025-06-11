@@ -10,10 +10,12 @@
 #include "EventHelper.h"
 #include "JSONUtils.h"
 #include "LLDBUtils.h"
-#include "Protocol/ProtocolRequests.h"
 #include "RequestHandler.h"
+#include "lldb/Protocol/DAP/ProtocolRequests.h"
 #include "llvm/Support/JSON.h"
 #include "llvm/Support/raw_ostream.h"
+
+using namespace lldb_private::protocol;
 
 namespace lldb_dap {
 
@@ -76,7 +78,7 @@ void RestartRequestHandler::operator()(
     // version of the launch arguments. If there's one, use it.
     if (const llvm::json::Value *restart_arguments =
             arguments->get("arguments")) {
-      protocol::LaunchRequestArguments updated_arguments;
+      dap::LaunchRequestArguments updated_arguments;
       llvm::json::Path::Root root;
       if (!fromJSON(*restart_arguments, updated_arguments, root)) {
         response["success"] = llvm::json::Value(false);

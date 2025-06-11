@@ -12,11 +12,11 @@
 #include "Handler/ResponseHandler.h"
 #include "JSONUtils.h"
 #include "LLDBUtils.h"
-#include "Protocol/ProtocolBase.h"
-#include "Protocol/ProtocolRequests.h"
 #include "RunInTerminal.h"
 #include "lldb/API/SBDefines.h"
 #include "lldb/API/SBEnvironment.h"
+#include "lldb/Protocol/DAP/ProtocolBase.h"
+#include "lldb/Protocol/DAP/ProtocolRequests.h"
 #include "llvm/Support/Error.h"
 #include <mutex>
 
@@ -24,7 +24,7 @@
 #include <unistd.h>
 #endif
 
-using namespace lldb_dap::protocol;
+using namespace lldb_private::protocol;
 
 namespace lldb_dap {
 
@@ -51,10 +51,9 @@ static uint32_t SetLaunchFlag(uint32_t flags, bool flag,
   return flags;
 }
 
-static llvm::Error
-RunInTerminal(DAP &dap, const protocol::LaunchRequestArguments &arguments) {
-  if (!dap.clientFeatures.contains(
-          protocol::eClientFeatureRunInTerminalRequest))
+static llvm::Error RunInTerminal(DAP &dap,
+                                 const dap::LaunchRequestArguments &arguments) {
+  if (!dap.clientFeatures.contains(dap::eClientFeatureRunInTerminalRequest))
     return llvm::make_error<DAPError>("Cannot use runInTerminal, feature is "
                                       "not supported by the connected client");
 
@@ -126,14 +125,14 @@ RunInTerminal(DAP &dap, const protocol::LaunchRequestArguments &arguments) {
                                  error.GetCString());
 }
 
-void BaseRequestHandler::Run(const Request &request) {
+void BaseRequestHandler::Run(const dap::Request &request) {
   // If this request was cancelled, send a cancelled response.
   if (dap.IsCancelled(request)) {
-    Response cancelled{/*request_seq=*/request.seq,
-                       /*command=*/request.command,
-                       /*success=*/false,
-                       /*message=*/eResponseMessageCancelled,
-                       /*body=*/std::nullopt};
+    dap::Response cancelled{/*request_seq=*/request.seq,
+                            /*command=*/request.command,
+                            /*success=*/false,
+                            /*message=*/dap::eResponseMessageCancelled,
+                            /*body=*/std::nullopt};
     dap.Send(cancelled);
     return;
   }
@@ -152,7 +151,7 @@ void BaseRequestHandler::Run(const Request &request) {
 }
 
 llvm::Error BaseRequestHandler::LaunchProcess(
-    const protocol::LaunchRequestArguments &arguments) const {
+    const dap::LaunchRequestArguments &arguments) const {
   auto launchCommands = arguments.launchCommands;
 
   // Instantiate a launch info instance for the target.

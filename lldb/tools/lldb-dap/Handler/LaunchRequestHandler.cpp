@@ -10,18 +10,19 @@
 #include "EventHelper.h"
 #include "JSONUtils.h"
 #include "LLDBUtils.h"
-#include "Protocol/ProtocolRequests.h"
 #include "RequestHandler.h"
+#include "lldb/Protocol/DAP/ProtocolRequests.h"
 #include "llvm/Support/Error.h"
 #include "llvm/Support/FileSystem.h"
 
 using namespace llvm;
-using namespace lldb_dap::protocol;
+using namespace lldb_private::protocol;
 
 namespace lldb_dap {
 
 /// Launch request; value of command field is 'launch'.
-Error LaunchRequestHandler::Run(const LaunchRequestArguments &arguments) const {
+Error LaunchRequestHandler::Run(
+    const dap::LaunchRequestArguments &arguments) const {
   // Validate that we have a well formed launch request.
   if (!arguments.launchCommands.empty() && arguments.runInTerminal)
     return make_error<DAPError>(

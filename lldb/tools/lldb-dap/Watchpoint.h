@@ -11,10 +11,10 @@
 
 #include "BreakpointBase.h"
 #include "DAPForward.h"
-#include "Protocol/ProtocolTypes.h"
 #include "lldb/API/SBError.h"
 #include "lldb/API/SBWatchpoint.h"
 #include "lldb/API/SBWatchpointOptions.h"
+#include "lldb/Protocol/DAP/ProtocolTypes.h"
 #include "lldb/lldb-types.h"
 #include <cstddef>
 
@@ -22,13 +22,14 @@ namespace lldb_dap {
 
 class Watchpoint : public BreakpointBase {
 public:
-  Watchpoint(DAP &d, const protocol::DataBreakpoint &breakpoint);
+  Watchpoint(DAP &d,
+             const lldb_private::protocol::dap::DataBreakpoint &breakpoint);
   Watchpoint(DAP &d, lldb::SBWatchpoint wp) : BreakpointBase(d), m_wp(wp) {}
 
   void SetCondition() override;
   void SetHitCondition() override;
 
-  protocol::Breakpoint ToProtocolBreakpoint() override;
+  lldb_private::protocol::dap::Breakpoint ToProtocolBreakpoint() override;
 
   void SetWatchpoint();
 

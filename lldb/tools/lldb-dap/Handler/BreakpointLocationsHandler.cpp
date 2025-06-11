@@ -11,14 +11,16 @@
 #include <optional>
 #include <vector>
 
+using namespace lldb_private::protocol;
+
 namespace lldb_dap {
 
 /// The `breakpointLocations` request returns all possible locations for source
 /// breakpoints in a given range. Clients should only call this request if the
 /// corresponding capability `supportsBreakpointLocationsRequest` is true.
-llvm::Expected<protocol::BreakpointLocationsResponseBody>
+llvm::Expected<dap::BreakpointLocationsResponseBody>
 BreakpointLocationsRequestHandler::Run(
-    const protocol::BreakpointLocationsArguments &args) const {
+    const dap::BreakpointLocationsArguments &args) const {
   uint32_t start_line = args.line;
   uint32_t start_column = args.column.value_or(LLDB_INVALID_COLUMN_NUMBER);
   uint32_t end_line = args.endLine.value_or(start_line);
@@ -41,12 +43,12 @@ BreakpointLocationsRequestHandler::Run(
   std::sort(locations.begin(), locations.end());
   locations.erase(llvm::unique(locations), locations.end());
 
-  std::vector<protocol::BreakpointLocation> breakpoint_locations;
+  std::vector<dap::BreakpointLocation> breakpoint_locations;
   for (auto &l : locations)
     breakpoint_locations.push_back(
         {l.first, l.second, std::nullopt, std::nullopt});
 
-  return protocol::BreakpointLocationsResponseBody{
+  return dap::BreakpointLocationsResponseBody{
       /*breakpoints=*/std::move(breakpoint_locations)};
 }
 

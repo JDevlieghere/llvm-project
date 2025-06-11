@@ -9,13 +9,13 @@
 #include "DAP.h"
 #include "EventHelper.h"
 #include "LLDBUtils.h"
-#include "Protocol/ProtocolRequests.h"
-#include "Protocol/ProtocolTypes.h"
 #include "RequestHandler.h"
+#include "lldb/Protocol/DAP/ProtocolRequests.h"
+#include "lldb/Protocol/DAP/ProtocolTypes.h"
 
 using namespace llvm;
 using namespace lldb;
-using namespace lldb_dap::protocol;
+using namespace lldb_private::protocol;
 
 namespace lldb_dap {
 
@@ -31,7 +31,7 @@ namespace lldb_dap {
 // used to control into which target the `stepIn` should occur. The list of
 // possible targets for a given source line can be retrieved via the
 // `stepInTargets` request.
-Error StepInRequestHandler::Run(const StepInArguments &args) const {
+Error StepInRequestHandler::Run(const dap::StepInArguments &args) const {
   SBThread thread = dap.GetLLDBThread(args.threadId);
   if (!thread.IsValid())
     return make_error<DAPError>("invalid thread");
@@ -44,7 +44,7 @@ Error StepInRequestHandler::Run(const StepInArguments &args) const {
     return make_error<NotStoppedError>();
 
   lldb::SBError error;
-  if (args.granularity == eSteppingGranularityInstruction) {
+  if (args.granularity == dap::eSteppingGranularityInstruction) {
     thread.StepInstruction(/*step_over=*/false, error);
     return ToError(error);
   }

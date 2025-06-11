@@ -10,16 +10,16 @@
 #include "EventHelper.h"
 #include "JSONUtils.h"
 #include "LLDBUtils.h"
-#include "Protocol/ProtocolRequests.h"
 #include "RequestHandler.h"
 #include "lldb/API/SBAttachInfo.h"
 #include "lldb/API/SBListener.h"
+#include "lldb/Protocol/DAP/ProtocolRequests.h"
 #include "lldb/lldb-defines.h"
 #include "llvm/Support/Error.h"
 #include "llvm/Support/FileSystem.h"
 
 using namespace llvm;
-using namespace lldb_dap::protocol;
+using namespace lldb_private::protocol;
 
 namespace lldb_dap {
 
@@ -28,7 +28,7 @@ namespace lldb_dap {
 ///
 /// Since attaching is debugger/runtime specific, the arguments for this request
 /// are not part of this specification.
-Error AttachRequestHandler::Run(const AttachRequestArguments &args) const {
+Error AttachRequestHandler::Run(const dap::AttachRequestArguments &args) const {
   // Validate that we have a well formed attach request.
   if (args.attachCommands.empty() && args.coreFile.empty() &&
       args.configuration.program.empty() &&

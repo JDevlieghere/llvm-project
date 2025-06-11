@@ -9,13 +9,13 @@
 #include "DAP.h"
 #include "EventHelper.h"
 #include "LLDBUtils.h"
-#include "Protocol/ProtocolRequests.h"
 #include "ProtocolUtils.h"
 #include "RequestHandler.h"
 #include "lldb/API/SBDebugger.h"
+#include "lldb/Protocol/DAP/ProtocolRequests.h"
 
 using namespace llvm;
-using namespace lldb_dap::protocol;
+using namespace lldb_private::protocol;
 
 namespace lldb_dap {
 
@@ -27,8 +27,8 @@ namespace lldb_dap {
 ///
 /// Clients should only call this request if the corresponding capability
 /// `supportsConfigurationDoneRequest` is true.
-llvm::Error
-ConfigurationDoneRequestHandler::Run(const ConfigurationDoneArguments &) const {
+llvm::Error ConfigurationDoneRequestHandler::Run(
+    const dap::ConfigurationDoneArguments &) const {
   dap.configuration_done = true;
 
   // Ensure any command scripts did not leave us in an unexpected state.

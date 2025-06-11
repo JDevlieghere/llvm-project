@@ -17,8 +17,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLDB_TOOLS_LLDB_DAP_PROTOCOL_PROTOCOL_TYPES_H
-#define LLDB_TOOLS_LLDB_DAP_PROTOCOL_PROTOCOL_TYPES_H
+#ifndef LLDB_PROTOCOL_DAP_PROTOCOL_TYPES_H
+#define LLDB_PROTOCOL_DAP_PROTOCOL_TYPES_H
 
 #include "lldb/lldb-defines.h"
 #include "llvm/ADT/DenseSet.h"
@@ -29,7 +29,7 @@
 
 #define LLDB_DAP_INVALID_VARRERF UINT64_MAX
 
-namespace lldb_dap::protocol {
+namespace lldb_private::protocol::dap {
 
 /// An `ExceptionBreakpointsFilter` is shown in the UI as an filter option for
 /// configuring how exceptions are dealt with.
@@ -665,7 +665,7 @@ struct DisassembledInstruction {
   /// Should always be set (if available) on the first instruction returned,
   /// but can be omitted afterwards if this instruction maps to the same source
   /// file as the previous instruction.
-  std::optional<protocol::Source> location;
+  std::optional<Source> location;
 
   /// The line within the source location that corresponds to this instruction,
   /// if any.
@@ -695,6 +695,6 @@ bool fromJSON(const llvm::json::Value &, DisassembledInstruction &,
               llvm::json::Path);
 llvm::json::Value toJSON(const DisassembledInstruction &);
 
-} // namespace lldb_dap::protocol
+} // namespace lldb_private::protocol::dap
 
 #endif

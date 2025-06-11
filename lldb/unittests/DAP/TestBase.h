@@ -7,9 +7,9 @@
 //===----------------------------------------------------------------------===//
 
 #include "DAP.h"
-#include "Protocol/ProtocolBase.h"
 #include "Transport.h"
 #include "lldb/Host/Pipe.h"
+#include "lldb/Protocol/DAP/ProtocolBase.h"
 #include "llvm/ADT/StringRef.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -38,9 +38,10 @@ protected:
 /// Matches an "output" event.
 inline auto OutputMatcher(const llvm::StringRef output,
                           const llvm::StringRef category = "console") {
-  return testing::VariantWith<lldb_dap::protocol::Event>(testing::FieldsAre(
-      /*event=*/"output", /*body=*/testing::Optional<llvm::json::Value>(
-          llvm::json::Object{{"category", category}, {"output", output}})));
+  return testing::VariantWith<lldb_private::protocol::dap::Event>(
+      testing::FieldsAre(
+          /*event=*/"output", /*body=*/testing::Optional<llvm::json::Value>(
+              llvm::json::Object{{"category", category}, {"output", output}})));
 }
 
 /// A base class for tests that interact with a `lldb_dap::DAP` instance.
@@ -64,7 +65,7 @@ protected:
 
   /// Closes the DAP output pipe and returns the remaining protocol messages in
   /// the buffer.
-  std::vector<lldb_dap::protocol::Message> DrainOutput();
+  std::vector<lldb_private::protocol::dap::Message> DrainOutput();
 };
 
 } // namespace lldb_dap_tests

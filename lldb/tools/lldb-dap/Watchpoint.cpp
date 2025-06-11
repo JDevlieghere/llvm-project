@@ -8,24 +8,26 @@
 
 #include "Watchpoint.h"
 #include "DAP.h"
-#include "Protocol/ProtocolTypes.h"
 #include "lldb/API/SBTarget.h"
+#include "lldb/Protocol/DAP/ProtocolTypes.h"
 #include "lldb/lldb-enumerations.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringRef.h"
 #include <cstdint>
 #include <string>
 
+using namespace lldb_private::protocol;
+
 namespace lldb_dap {
-Watchpoint::Watchpoint(DAP &d, const protocol::DataBreakpoint &breakpoint)
+Watchpoint::Watchpoint(DAP &d, const dap::DataBreakpoint &breakpoint)
     : BreakpointBase(d, breakpoint.condition, breakpoint.hitCondition) {
   llvm::StringRef dataId = breakpoint.dataId;
   auto [addr_str, size_str] = dataId.split('/');
   llvm::to_integer(addr_str, m_addr, 16);
   llvm::to_integer(size_str, m_size);
   m_options.SetWatchpointTypeRead(breakpoint.accessType !=
-                                  protocol::eDataBreakpointAccessTypeWrite);
-  if (breakpoint.accessType != protocol::eDataBreakpointAccessTypeRead)
+                                  dap::eDataBreakpointAccessTypeWrite);
+  if (breakpoint.accessType != dap::eDataBreakpointAccessTypeRead)
     m_options.SetWatchpointTypeWrite(lldb::eWatchpointWriteTypeOnModify);
 }
 
@@ -37,8 +39,8 @@ void Watchpoint::SetHitCondition() {
     m_wp.SetIgnoreCount(hitCount - 1);
 }
 
-protocol::Breakpoint Watchpoint::ToProtocolBreakpoint() {
-  protocol::Breakpoint breakpoint;
+dap::Breakpoint Watchpoint::ToProtocolBreakpoint() {
+  dap::Breakpoint breakpoint;
   if (!m_error.IsValid() || m_error.Fail()) {
     breakpoint.verified = false;
     if (m_error.Fail())

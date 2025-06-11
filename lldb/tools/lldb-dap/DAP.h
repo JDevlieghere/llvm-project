@@ -15,9 +15,6 @@
 #include "InstructionBreakpoint.h"
 #include "OutputRedirector.h"
 #include "ProgressEvent.h"
-#include "Protocol/ProtocolBase.h"
-#include "Protocol/ProtocolRequests.h"
-#include "Protocol/ProtocolTypes.h"
 #include "SourceBreakpoint.h"
 #include "Transport.h"
 #include "Variables.h"
@@ -31,6 +28,9 @@
 #include "lldb/API/SBMutex.h"
 #include "lldb/API/SBTarget.h"
 #include "lldb/API/SBThread.h"
+#include "lldb/Protocol/DAP/ProtocolBase.h"
+#include "lldb/Protocol/DAP/ProtocolRequests.h"
+#include "lldb/Protocol/DAP/ProtocolTypes.h"
 #include "lldb/lldb-types.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/DenseSet.h"
@@ -61,8 +61,8 @@ typedef llvm::StringMap<FunctionBreakpoint> FunctionBreakpointMap;
 typedef llvm::DenseMap<lldb::addr_t, InstructionBreakpoint>
     InstructionBreakpointMap;
 
-using AdapterFeature = protocol::AdapterFeature;
-using ClientFeature = protocol::ClientFeature;
+using AdapterFeature = lldb_private::protocol::dap::AdapterFeature;
+using ClientFeature = lldb_private::protocol::dap::ClientFeature;
 
 enum class OutputType { Console, Important, Stdout, Stderr, Telemetry };
 
@@ -87,7 +87,7 @@ struct DAP {
   OutputRedirector err;
 
   /// Configuration specified by the launch or attach commands.
-  protocol::Configuration configuration;
+  lldb_private::protocol::dap::Configuration configuration;
 
   /// The debugger instance for this DAP session.
   lldb::SBDebugger debugger;
@@ -107,7 +107,8 @@ struct DAP {
 
   /// A copy of the last LaunchRequest so we can reuse its arguments if we get a
   /// RestartRequest. Restarting an AttachRequest is not supported.
-  std::optional<protocol::LaunchRequestArguments> last_launch_request;
+  std::optional<lldb_private::protocol::dap::LaunchRequestArguments>
+      last_launch_request;
 
   /// The focused thread for this DAP session.
   lldb::tid_t focus_tid = LLDB_INVALID_THREAD_ID;
@@ -152,7 +153,7 @@ struct DAP {
   llvm::DenseSet<ClientFeature> clientFeatures;
 
   /// The initial thread list upon attaching.
-  std::vector<protocol::Thread> initial_thread_list;
+  std::vector<lldb_private::protocol::dap::Thread> initial_thread_list;
 
   /// Keep track of all the modules our client knows about: either through the
   /// modules request or the module events.
@@ -200,7 +201,9 @@ struct DAP {
   void StopEventHandlers();
 
   /// Configures the debug adapter for launching/attaching.
-  void SetConfiguration(const protocol::Configuration &confing, bool is_attach);
+  void
+  SetConfiguration(const lldb_private::protocol::dap::Configuration &confing,
+                   bool is_attach);
 
   /// Configure source maps based on the current `DAPConfiguration`.
   void ConfigureSourceMaps();
@@ -209,7 +212,7 @@ struct DAP {
   /// "out" stream.
   void SendJSON(const llvm::json::Value &json);
   /// Send the given message to the client
-  void Send(const protocol::Message &message);
+  void Send(const lldb_private::protocol::dap::Message &message);
 
   void SendOutput(OutputType o, const llvm::StringRef output);
 
@@ -282,7 +285,7 @@ struct DAP {
   /// listeing for its breakpoint events.
   void SetTarget(const lldb::SBTarget target);
 
-  bool HandleObject(const protocol::Message &M);
+  bool HandleObject(const lldb_private::protocol::dap::Message &M);
 
   /// Disconnect the DAP session.
   llvm::Error Disconnect();
@@ -321,7 +324,7 @@ struct DAP {
   }
 
   /// The set of capablities supported by this adapter.
-  protocol::Capabilities GetCapabilities();
+  lldb_private::protocol::dap::Capabilities GetCapabilities();
 
   /// Debuggee will continue from stopped state.
   void WillContinue() { variables.Clear(); }
@@ -356,10 +359,10 @@ struct DAP {
   InstructionBreakpoint *GetInstructionBPFromStopReason(lldb::SBThread &thread);
 
   /// Checks if the request is cancelled.
-  bool IsCancelled(const protocol::Request &);
+  bool IsCancelled(const lldb_private::protocol::dap::Request &);
 
   /// Clears the cancel request from the set of tracked cancel requests.
-  void ClearCancelRequest(const protocol::CancelArguments &);
+  void ClearCancelRequest(const lldb_private::protocol::dap::CancelArguments &);
 
   lldb::SBMutex GetAPIMutex() const { return target.GetAPIMutex(); }
 
@@ -377,15 +380,18 @@ struct DAP {
   ///   The breakpoints to set.
   ///
   /// \return a vector of the breakpoints that were set.
-  std::vector<protocol::Breakpoint> SetSourceBreakpoints(
-      const protocol::Source &source,
-      const std::optional<std::vector<protocol::SourceBreakpoint>>
+  std::vector<lldb_private::protocol::dap::Breakpoint> SetSourceBreakpoints(
+      const lldb_private::protocol::dap::Source &source,
+      const std::optional<
+          std::vector<lldb_private::protocol::dap::SourceBreakpoint>>
           &breakpoints);
 
 private:
-  std::vector<protocol::Breakpoint> SetSourceBreakpoints(
-      const protocol::Source &source,
-      const std::optional<std::vector<protocol::SourceBreakpoint>> &breakpoints,
+  std::vector<lldb_private::protocol::dap::Breakpoint> SetSourceBreakpoints(
+      const lldb_private::protocol::dap::Source &source,
+      const std::optional<
+          std::vector<lldb_private::protocol::dap::SourceBreakpoint>>
+          &breakpoints,
       SourceBreakpointMap &existing_breakpoints);
 
   /// Registration of request handler.
@@ -407,7 +413,7 @@ private:
   /// @}
 
   /// Queue for all incoming messages.
-  std::deque<protocol::Message> m_queue;
+  std::deque<lldb_private::protocol::dap::Message> m_queue;
   std::mutex m_queue_mutex;
   std::condition_variable m_queue_cv;
 
@@ -415,7 +421,7 @@ private:
   llvm::SmallSet<int64_t, 4> m_cancelled_requests;
 
   std::mutex m_active_request_mutex;
-  const protocol::Request *m_active_request;
+  const lldb_private::protocol::dap::Request *m_active_request;
 
   llvm::StringMap<SourceBreakpointMap> m_source_breakpoints;
   llvm::DenseMap<int64_t, SourceBreakpointMap> m_source_assembly_breakpoints;

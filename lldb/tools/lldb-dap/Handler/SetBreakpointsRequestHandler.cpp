@@ -7,9 +7,11 @@
 //===----------------------------------------------------------------------===//
 
 #include "DAP.h"
-#include "Protocol/ProtocolRequests.h"
 #include "RequestHandler.h"
+#include "lldb/Protocol/DAP/ProtocolRequests.h"
 #include <vector>
+
+using namespace lldb_private::protocol;
 
 namespace lldb_dap {
 
@@ -17,12 +19,12 @@ namespace lldb_dap {
 /// breakpoints in that source. To clear all breakpoint for a source, specify an
 /// empty array. When a breakpoint is hit, a `stopped` event (with reason
 /// `breakpoint`) is generated.
-llvm::Expected<protocol::SetBreakpointsResponseBody>
+llvm::Expected<dap::SetBreakpointsResponseBody>
 SetBreakpointsRequestHandler::Run(
-    const protocol::SetBreakpointsArguments &args) const {
-  std::vector<protocol::Breakpoint> response_breakpoints =
+    const dap::SetBreakpointsArguments &args) const {
+  std::vector<dap::Breakpoint> response_breakpoints =
       dap.SetSourceBreakpoints(args.source, args.breakpoints);
-  return protocol::SetBreakpointsResponseBody{std::move(response_breakpoints)};
+  return dap::SetBreakpointsResponseBody{std::move(response_breakpoints)};
 }
 
 } // namespace lldb_dap

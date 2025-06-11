@@ -14,9 +14,6 @@
 #include "JSONUtils.h"
 #include "LLDBUtils.h"
 #include "OutputRedirector.h"
-#include "Protocol/ProtocolBase.h"
-#include "Protocol/ProtocolRequests.h"
-#include "Protocol/ProtocolTypes.h"
 #include "Transport.h"
 #include "lldb/API/SBBreakpoint.h"
 #include "lldb/API/SBCommandInterpreter.h"
@@ -26,6 +23,9 @@
 #include "lldb/API/SBListener.h"
 #include "lldb/API/SBProcess.h"
 #include "lldb/API/SBStream.h"
+#include "lldb/Protocol/DAP/ProtocolBase.h"
+#include "lldb/Protocol/DAP/ProtocolRequests.h"
+#include "lldb/Protocol/DAP/ProtocolTypes.h"
 #include "lldb/Utility/IOObject.h"
 #include "lldb/Utility/Status.h"
 #include "lldb/lldb-defines.h"
@@ -69,7 +69,7 @@
 #endif
 
 using namespace lldb_dap;
-using namespace lldb_dap::protocol;
+using namespace lldb_private::protocol;
 
 namespace {
 #ifdef _WIN32
@@ -264,7 +264,7 @@ void DAP::StopEventHandlers() {
 void DAP::SendJSON(const llvm::json::Value &json) {
   // FIXME: Instead of parsing the output message from JSON, pass the `Message`
   // as parameter to `SendJSON`.
-  Message message;
+  dap::Message message;
   llvm::json::Path::Root root;
   if (!fromJSON(json, message, root)) {
     DAP_LOG_ERROR(log, root.getError(), "({1}) encoding failed: {0}",
@@ -274,21 +274,21 @@ void DAP::SendJSON(const llvm::json::Value &json) {
   Send(message);
 }
 
-void DAP::Send(const Message &message) {
+void DAP::Send(const dap::Message &message) {
   // FIXME: After all the requests have migrated from LegacyRequestHandler >
   // RequestHandler<> this should be handled in RequestHandler<>::operator().
-  if (auto *resp = std::get_if<Response>(&message);
+  if (auto *resp = std::get_if<dap::Response>(&message);
       resp && debugger.InterruptRequested()) {
     // Clear the interrupt request.
     debugger.CancelInterruptRequest();
 
     // If the debugger was interrupted, convert this response into a 'cancelled'
     // response because we might have a partial result.
-    Response cancelled{/*request_seq=*/resp->request_seq,
-                       /*command=*/resp->command,
-                       /*success=*/false,
-                       /*message=*/eResponseMessageCancelled,
-                       /*body=*/std::nullopt};
+    dap::Response cancelled{/*request_seq=*/resp->request_seq,
+                            /*command=*/resp->command,
+                            /*success=*/false,
+                            /*message=*/dap::eResponseMessageCancelled,
+                            /*body=*/std::nullopt};
     if (llvm::Error err = transport.Write(cancelled))
       DAP_LOG_ERROR(log, std::move(err), "({1}) write failed: {0}",
                     transport.GetClientName());
@@ -722,10 +722,10 @@ void DAP::SetTarget(const lldb::SBTarget target) {
   }
 }
 
-bool DAP::HandleObject(const Message &M) {
+bool DAP::HandleObject(const dap::Message &M) {
   TelemetryDispatcher dispatcher(&debugger);
   dispatcher.Set("client_name", transport.GetClientName().str());
-  if (const auto *req = std::get_if<Request>(&M)) {
+  if (const auto *req = std::get_if<dap::Request>(&M)) {
     {
       std::lock_guard<std::mutex> guard(m_active_request_mutex);
       m_active_request = req;
@@ -755,7 +755,7 @@ bool DAP::HandleObject(const Message &M) {
     return false; // Fail
   }
 
-  if (const auto *resp = std::get_if<Response>(&M)) {
+  if (const auto *resp = std::get_if<dap::Response>(&M)) {
     std::unique_ptr<ResponseHandler> response_handler;
     {
       std::lock_guard<std::mutex> guard(call_mutex);
@@ -778,22 +778,21 @@ bool DAP::HandleObject(const Message &M) {
     } else {
       llvm::StringRef message = "Unknown error, response failed";
       if (resp->message) {
-        message =
-            std::visit(llvm::makeVisitor(
-                           [](const std::string &message) -> llvm::StringRef {
-                             return message;
-                           },
-                           [](const protocol::ResponseMessage &message)
-                               -> llvm::StringRef {
-                             switch (message) {
-                             case protocol::eResponseMessageCancelled:
-                               return "cancelled";
-                             case protocol::eResponseMessageNotStopped:
-                               return "notStopped";
-                             }
-                             llvm_unreachable("unknown response message kind.");
-                           }),
-                       *resp->message);
+        message = std::visit(
+            llvm::makeVisitor(
+                [](const std::string &message) -> llvm::StringRef {
+                  return message;
+                },
+                [](const dap::ResponseMessage &message) -> llvm::StringRef {
+                  switch (message) {
+                  case dap::eResponseMessageCancelled:
+                    return "cancelled";
+                  case dap::eResponseMessageNotStopped:
+                    return "notStopped";
+                  }
+                  llvm_unreachable("unknown response message kind.");
+                }),
+            *resp->message);
       }
       dispatcher.Set("error", message.str());
 
@@ -853,21 +852,21 @@ llvm::Error DAP::Disconnect(bool terminateDebuggee) {
   return ToError(error);
 }
 
-bool DAP::IsCancelled(const protocol::Request &req) {
+bool DAP::IsCancelled(const dap::Request &req) {
   std::lock_guard<std::mutex> guard(m_cancelled_requests_mutex);
   return m_cancelled_requests.contains(req.seq);
 }
 
-void DAP::ClearCancelRequest(const CancelArguments &args) {
+void DAP::ClearCancelRequest(const dap::CancelArguments &args) {
   std::lock_guard<std::mutex> guard(m_cancelled_requests_mutex);
   if (args.requestId)
     m_cancelled_requests.erase(*args.requestId);
 }
 
 template <typename T>
-static std::optional<T> getArgumentsIfRequest(const Message &pm,
+static std::optional<T> getArgumentsIfRequest(const dap::Message &pm,
                                               llvm::StringLiteral command) {
-  auto *const req = std::get_if<Request>(&pm);
+  auto *const req = std::get_if<dap::Request>(&pm);
   if (!req || req->command != command)
     return std::nullopt;
 
@@ -892,7 +891,7 @@ llvm::Error DAP::Loop() {
         });
 
         while (!disconnecting) {
-          llvm::Expected<Message> next =
+          llvm::Expected<dap::Message> next =
               transport.Read(std::chrono::seconds(1));
           if (next.errorIsA<EndOfFileError>()) {
             consumeError(next.takeError());
@@ -911,13 +910,12 @@ llvm::Error DAP::Loop() {
             return errWrapper;
           }
 
-          if (const protocol::Request *req =
-                  std::get_if<protocol::Request>(&*next);
+          if (const dap::Request *req = std::get_if<dap::Request>(&*next);
               req && req->arguments == "disconnect")
             disconnecting = true;
 
-          const std::optional<CancelArguments> cancel_args =
-              getArgumentsIfRequest<CancelArguments>(*next, "cancel");
+          const std::optional<dap::CancelArguments> cancel_args =
+              getArgumentsIfRequest<dap::CancelArguments>(*next, "cancel");
           if (cancel_args) {
             {
               std::lock_guard<std::mutex> guard(m_cancelled_requests_mutex);
@@ -962,7 +960,7 @@ llvm::Error DAP::Loop() {
     if (disconnecting && m_queue.empty())
       break;
 
-    Message next = m_queue.front();
+    dap::Message next = m_queue.front();
     m_queue.pop_front();
 
     // Unlock while we're processing the event.
@@ -1035,8 +1033,7 @@ void DAP::ConfigureSourceMaps() {
   RunLLDBCommands("Setting source map:", {sourceMapCommand});
 }
 
-void DAP::SetConfiguration(const protocol::Configuration &config,
-                           bool is_attach) {
+void DAP::SetConfiguration(const dap::Configuration &config, bool is_attach) {
   configuration = config;
   stop_at_entry = config.stopOnEntry;
   this->is_attach = is_attach;
@@ -1099,14 +1096,14 @@ DAP::GetInstructionBPFromStopReason(lldb::SBThread &thread) {
   return inst_bp;
 }
 
-protocol::Capabilities DAP::GetCapabilities() {
-  protocol::Capabilities capabilities;
+dap::Capabilities DAP::GetCapabilities() {
+  dap::Capabilities capabilities;
 
   // Supported capabilities that are not specific to a single request.
   capabilities.supportedFeatures = {
-      protocol::eAdapterFeatureLogPoints,
-      protocol::eAdapterFeatureSteppingGranularity,
-      protocol::eAdapterFeatureValueFormattingOptions,
+      dap::eAdapterFeatureLogPoints,
+      dap::eAdapterFeatureSteppingGranularity,
+      dap::eAdapterFeatureValueFormattingOptions,
   };
 
   // Capabilities associated with specific requests.
@@ -1117,7 +1114,7 @@ protocol::Capabilities DAP::GetCapabilities() {
   }
 
   // Available filters or options for the setExceptionBreakpoints request.
-  std::vector<protocol::ExceptionBreakpointsFilter> filters;
+  std::vector<dap::ExceptionBreakpointsFilter> filters;
   for (const auto &exc_bp : *exception_breakpoints)
     filters.emplace_back(CreateExceptionBreakpointFilter(exc_bp));
   capabilities.exceptionBreakpointFilters = std::move(filters);
@@ -1367,10 +1364,10 @@ void DAP::EventThread() {
   }
 }
 
-std::vector<protocol::Breakpoint> DAP::SetSourceBreakpoints(
-    const protocol::Source &source,
-    const std::optional<std::vector<protocol::SourceBreakpoint>> &breakpoints) {
-  std::vector<protocol::Breakpoint> response_breakpoints;
+std::vector<dap::Breakpoint> DAP::SetSourceBreakpoints(
+    const dap::Source &source,
+    const std::optional<std::vector<dap::SourceBreakpoint>> &breakpoints) {
+  std::vector<dap::Breakpoint> response_breakpoints;
   if (source.sourceReference) {
     // Breakpoint set by assembly source.
     auto &existing_breakpoints =
@@ -1388,11 +1385,11 @@ std::vector<protocol::Breakpoint> DAP::SetSourceBreakpoints(
   return response_breakpoints;
 }
 
-std::vector<protocol::Breakpoint> DAP::SetSourceBreakpoints(
-    const protocol::Source &source,
-    const std::optional<std::vector<protocol::SourceBreakpoint>> &breakpoints,
+std::vector<dap::Breakpoint> DAP::SetSourceBreakpoints(
+    const dap::Source &source,
+    const std::optional<std::vector<dap::SourceBreakpoint>> &breakpoints,
     SourceBreakpointMap &existing_breakpoints) {
-  std::vector<protocol::Breakpoint> response_breakpoints;
+  std::vector<dap::Breakpoint> response_breakpoints;
 
   SourceBreakpointMap request_breakpoints;
   if (breakpoints) {
@@ -1407,7 +1404,7 @@ std::vector<protocol::Breakpoint> DAP::SetSourceBreakpoints(
       // We check if this breakpoint already exists to update it.
       if (inserted) {
         if (llvm::Error error = iv->second.SetBreakpoint(source)) {
-          protocol::Breakpoint invalid_breakpoint;
+          dap::Breakpoint invalid_breakpoint;
           invalid_breakpoint.message = llvm::toString(std::move(error));
           invalid_breakpoint.verified = false;
           response_breakpoints.push_back(std::move(invalid_breakpoint));
@@ -1418,8 +1415,7 @@ std::vector<protocol::Breakpoint> DAP::SetSourceBreakpoints(
         iv->second.UpdateBreakpoint(src_bp);
       }
 
-      protocol::Breakpoint response_breakpoint =
-          iv->second.ToProtocolBreakpoint();
+      dap::Breakpoint response_breakpoint = iv->second.ToProtocolBreakpoint();
       response_breakpoint.source = source;
 
       if (!response_breakpoint.line &&

@@ -10,6 +10,8 @@
 #include "EventHelper.h"
 #include "RequestHandler.h"
 
+using namespace lldb_private::protocol;
+
 namespace lldb_dap {
 
 /// Replaces all existing instruction breakpoints. Typically, instruction
@@ -18,10 +20,10 @@ namespace lldb_dap {
 /// a stopped event (with reason instruction breakpoint) is generated. Clients
 /// should only call this request if the corresponding capability
 /// supportsInstructionBreakpoints is true.
-llvm::Expected<protocol::SetInstructionBreakpointsResponseBody>
+llvm::Expected<dap::SetInstructionBreakpointsResponseBody>
 SetInstructionBreakpointsRequestHandler::Run(
-    const protocol::SetInstructionBreakpointsArguments &args) const {
-  std::vector<protocol::Breakpoint> response_breakpoints;
+    const dap::SetInstructionBreakpointsArguments &args) const {
+  std::vector<dap::Breakpoint> response_breakpoints;
 
   // Disable any instruction breakpoints that aren't in this request.
   // There is no call to remove instruction breakpoints other than calling this
@@ -50,7 +52,7 @@ SetInstructionBreakpointsRequestHandler::Run(
     dap.instruction_breakpoints.erase(addr);
   }
 
-  return protocol::SetInstructionBreakpointsResponseBody{
+  return dap::SetInstructionBreakpointsResponseBody{
       std::move(response_breakpoints)};
 }
 

@@ -6,9 +6,9 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "Protocol/ProtocolTypes.h"
-#include "Protocol/ProtocolEvents.h"
-#include "Protocol/ProtocolRequests.h"
+#include "lldb/Protocol/DAP/ProtocolTypes.h"
+#include "lldb/Protocol/DAP/ProtocolEvents.h"
+#include "lldb/Protocol/DAP/ProtocolRequests.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/JSON.h"
 #include "llvm/Testing/Support/Error.h"
@@ -17,9 +17,7 @@
 #include <optional>
 
 using namespace llvm;
-using namespace lldb;
-using namespace lldb_dap;
-using namespace lldb_dap::protocol;
+using namespace lldb_private::protocol::dap;
 using llvm::json::parse;
 using llvm::json::Value;
 

@@ -17,11 +17,11 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLDB_TOOLS_LLDB_DAP_PROTOCOL_PROTOCOL_REQUESTS_H
-#define LLDB_TOOLS_LLDB_DAP_PROTOCOL_PROTOCOL_REQUESTS_H
+#ifndef LLDB_PROTOCOL_DAP_PROTOCOL_REQUESTS_H
+#define LLDB_PROTOCOL_DAP_PROTOCOL_REQUESTS_H
 
-#include "Protocol/ProtocolBase.h"
-#include "Protocol/ProtocolTypes.h"
+#include "lldb/Protocol/DAP/ProtocolBase.h"
+#include "lldb/Protocol/DAP/ProtocolTypes.h"
 #include "lldb/lldb-defines.h"
 #include "lldb/lldb-types.h"
 #include "llvm/ADT/DenseSet.h"
@@ -33,7 +33,7 @@
 #include <string>
 #include <vector>
 
-namespace lldb_dap::protocol {
+namespace lldb_private::protocol::dap {
 
 /// Arguments for `cancel` request.
 struct CancelArguments {
@@ -774,6 +774,6 @@ bool fromJSON(const llvm::json::Value &, DisassembleResponseBody &,
               llvm::json::Path);
 llvm::json::Value toJSON(const DisassembleResponseBody &);
 
-} // namespace lldb_dap::protocol
+} // namespace lldb_private::protocol::dap
 
 #endif

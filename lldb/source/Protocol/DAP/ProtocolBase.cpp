@@ -6,7 +6,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "Protocol/ProtocolBase.h"
+#include "lldb/Protocol/DAP/ProtocolBase.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/StringSwitch.h"
 #include "llvm/Support/ErrorHandling.h"
@@ -29,7 +29,7 @@ static bool mapRaw(const json::Value &Params, StringLiteral Prop,
   return true;
 }
 
-namespace lldb_dap::protocol {
+namespace lldb_private::protocol::dap {
 
 enum MessageType : unsigned {
   eMessageTypeRequest,
@@ -295,4 +295,4 @@ json::Value toJSON(const ErrorResponseBody &E) {
   return result;
 }
 
-} // namespace lldb_dap::protocol
+} // namespace lldb_private::protocol::dap

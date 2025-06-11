@@ -8,21 +8,23 @@
 
 #include "DAP.h"
 #include "EventHelper.h"
-#include "Protocol/ProtocolTypes.h"
 #include "RequestHandler.h"
 #include "lldb/API/SBMemoryRegionInfo.h"
+#include "lldb/Protocol/DAP/ProtocolTypes.h"
 #include "llvm/ADT/StringExtras.h"
 #include <optional>
+
+using namespace lldb_private::protocol;
 
 namespace lldb_dap {
 
 /// Obtains information on a possible data breakpoint that could be set on an
 /// expression or variable. Clients should only call this request if the
 /// corresponding capability supportsDataBreakpoints is true.
-llvm::Expected<protocol::DataBreakpointInfoResponseBody>
+llvm::Expected<dap::DataBreakpointInfoResponseBody>
 DataBreakpointInfoRequestHandler::Run(
-    const protocol::DataBreakpointInfoArguments &args) const {
-  protocol::DataBreakpointInfoResponseBody response;
+    const dap::DataBreakpointInfoArguments &args) const {
+  dap::DataBreakpointInfoResponseBody response;
   lldb::SBFrame frame = dap.GetLLDBFrame(args.frameId.value_or(UINT64_MAX));
   lldb::SBValue variable = dap.variables.FindVariable(
       args.variablesReference.value_or(0), args.name);
@@ -83,9 +85,9 @@ DataBreakpointInfoRequestHandler::Run(
 
   if (is_data_ok) {
     response.dataId = addr + "/" + size;
-    response.accessTypes = {protocol::eDataBreakpointAccessTypeRead,
-                            protocol::eDataBreakpointAccessTypeWrite,
-                            protocol::eDataBreakpointAccessTypeReadWrite};
+    response.accessTypes = {dap::eDataBreakpointAccessTypeRead,
+                            dap::eDataBreakpointAccessTypeWrite,
+                            dap::eDataBreakpointAccessTypeReadWrite};
     response.description = size + " bytes at " + addr + " " + args.name;
   }
 

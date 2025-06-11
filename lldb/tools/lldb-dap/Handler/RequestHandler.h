@@ -12,9 +12,9 @@
 #include "DAP.h"
 #include "DAPError.h"
 #include "DAPLog.h"
-#include "Protocol/ProtocolBase.h"
-#include "Protocol/ProtocolRequests.h"
-#include "Protocol/ProtocolTypes.h"
+#include "lldb/Protocol/DAP/ProtocolBase.h"
+#include "lldb/Protocol/DAP/ProtocolRequests.h"
+#include "lldb/Protocol/DAP/ProtocolTypes.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/Error.h"
@@ -48,9 +48,10 @@ public:
 
   virtual ~BaseRequestHandler() = default;
 
-  void Run(const protocol::Request &);
+  void Run(const lldb_private::protocol::dap::Request &);
 
-  virtual void operator()(const protocol::Request &request) const = 0;
+  virtual void
+  operator()(const lldb_private::protocol::dap::Request &request) const = 0;
 
   using FeatureSet = llvm::SmallDenseSet<AdapterFeature, 1>;
   virtual FeatureSet GetSupportedFeatures() const { return {}; }
@@ -68,8 +69,8 @@ protected:
   // runInTerminal if applicable. It doesn't do any of the additional
   // initialization and bookkeeping stuff that is needed for `request_launch`.
   // This way we can reuse the process launching logic for RestartRequest too.
-  llvm::Error
-  LaunchProcess(const protocol::LaunchRequestArguments &request) const;
+  llvm::Error LaunchProcess(
+      const lldb_private::protocol::dap::LaunchRequestArguments &request) const;
 
   // Check if the step-granularity is `instruction`.
   bool HasInstructionGranularity(const llvm::json::Object &request) const;
@@ -83,14 +84,16 @@ protected:
 class LegacyRequestHandler : public BaseRequestHandler {
   using BaseRequestHandler::BaseRequestHandler;
   virtual void operator()(const llvm::json::Object &request) const = 0;
-  void operator()(const protocol::Request &request) const override {
+  void operator()(
+      const lldb_private::protocol::dap::Request &request) const override {
     auto req = toJSON(request);
     (*this)(*req.getAsObject());
   }
 };
 
 template <typename Args>
-llvm::Expected<Args> parseArgs(const protocol::Request &request) {
+llvm::Expected<Args>
+parseArgs(const lldb_private::protocol::dap::Request &request) {
   if (!is_optional_v<Args> && !request.arguments)
     return llvm::make_error<DAPError>(
         llvm::formatv("arguments required for command '{0}' "
@@ -112,8 +115,8 @@ llvm::Expected<Args> parseArgs(const protocol::Request &request) {
   return arguments;
 }
 template <>
-inline llvm::Expected<protocol::EmptyArguments>
-parseArgs(const protocol::Request &request) {
+inline llvm::Expected<lldb_private::protocol::dap::EmptyArguments>
+parseArgs(const lldb_private::protocol::dap::Request &request) {
   return std::nullopt;
 }
 
@@ -127,8 +130,9 @@ template <typename Args, typename Resp>
 class RequestHandler : public BaseRequestHandler {
   using BaseRequestHandler::BaseRequestHandler;
 
-  void operator()(const protocol::Request &request) const override {
-    protocol::Response response;
+  void operator()(
+      const lldb_private::protocol::dap::Request &request) const override {
+    lldb_private::protocol::dap::Response response;
     response.request_seq = request.seq;
     response.command = request.command;
 
@@ -160,7 +164,7 @@ class RequestHandler : public BaseRequestHandler {
     if (dap.debugger.InterruptRequested()) {
       dap.debugger.CancelInterruptRequest();
       response.success = false;
-      response.message = protocol::eResponseMessageCancelled;
+      response.message = lldb_private::protocol::dap::eResponseMessageCancelled;
       response.body = std::nullopt;
     }
 
@@ -178,33 +182,35 @@ class RequestHandler : public BaseRequestHandler {
   /// error.
   virtual void PostRun() const {};
 
-  void HandleErrorResponse(llvm::Error err,
-                           protocol::Response &response) const {
+  void
+  HandleErrorResponse(llvm::Error err,
+                      lldb_private::protocol::dap::Response &response) const {
     response.success = false;
     llvm::handleAllErrors(
         std::move(err),
         [&](const NotStoppedError &err) {
-          response.message = lldb_dap::protocol::eResponseMessageNotStopped;
+          response.message =
+              lldb_private::protocol::dap::eResponseMessageNotStopped;
         },
         [&](const DAPError &err) {
-          protocol::ErrorMessage error_message;
+          lldb_private::protocol::dap::ErrorMessage error_message;
           error_message.sendTelemetry = false;
           error_message.format = err.getMessage();
           error_message.showUser = err.getShowUser();
           error_message.id = err.convertToErrorCode().value();
           error_message.url = err.getURL();
           error_message.urlLabel = err.getURLLabel();
-          protocol::ErrorResponseBody body;
+          lldb_private::protocol::dap::ErrorResponseBody body;
           body.error = error_message;
           response.body = body;
         },
         [&](const llvm::ErrorInfoBase &err) {
-          protocol::ErrorMessage error_message;
+          lldb_private::protocol::dap::ErrorMessage error_message;
           error_message.showUser = true;
           error_message.sendTelemetry = false;
           error_message.format = err.message();
           error_message.id = err.convertToErrorCode().value();
-          protocol::ErrorResponseBody body;
+          lldb_private::protocol::dap::ErrorResponseBody body;
           body.error = error_message;
           response.body = body;
         });
@@ -212,27 +218,31 @@ class RequestHandler : public BaseRequestHandler {
 };
 
 class AttachRequestHandler
-    : public RequestHandler<protocol::AttachRequestArguments,
-                            protocol::AttachResponse> {
+    : public RequestHandler<lldb_private::protocol::dap::AttachRequestArguments,
+                            lldb_private::protocol::dap::AttachResponse> {
 public:
   using RequestHandler::RequestHandler;
   static llvm::StringLiteral GetCommand() { return "attach"; }
-  llvm::Error Run(const protocol::AttachRequestArguments &args) const override;
+  llvm::Error Run(const lldb_private::protocol::dap::AttachRequestArguments
+                      &args) const override;
   void PostRun() const override;
 };
 
 class BreakpointLocationsRequestHandler
     : public RequestHandler<
-          protocol::BreakpointLocationsArguments,
-          llvm::Expected<protocol::BreakpointLocationsResponseBody>> {
+          lldb_private::protocol::dap::BreakpointLocationsArguments,
+          llvm::Expected<
+              lldb_private::protocol::dap::BreakpointLocationsResponseBody>> {
 public:
   using RequestHandler::RequestHandler;
   static llvm::StringLiteral GetCommand() { return "breakpointLocations"; }
   FeatureSet GetSupportedFeatures() const override {
-    return {protocol::eAdapterFeatureBreakpointLocationsRequest};
+    return {
+        lldb_private::protocol::dap::eAdapterFeatureBreakpointLocationsRequest};
   }
-  llvm::Expected<protocol::BreakpointLocationsResponseBody>
-  Run(const protocol::BreakpointLocationsArguments &args) const override;
+  llvm::Expected<lldb_private::protocol::dap::BreakpointLocationsResponseBody>
+  Run(const lldb_private::protocol::dap::BreakpointLocationsArguments &args)
+      const override;
 
   std::vector<std::pair<uint32_t, uint32_t>>
   GetSourceBreakpointLocations(std::string path, uint32_t start_line,
@@ -248,45 +258,52 @@ public:
   using LegacyRequestHandler::LegacyRequestHandler;
   static llvm::StringLiteral GetCommand() { return "completions"; }
   FeatureSet GetSupportedFeatures() const override {
-    return {protocol::eAdapterFeatureCompletionsRequest};
+    return {lldb_private::protocol::dap::eAdapterFeatureCompletionsRequest};
   }
   void operator()(const llvm::json::Object &request) const override;
 };
 
 class ContinueRequestHandler
-    : public RequestHandler<protocol::ContinueArguments,
-                            llvm::Expected<protocol::ContinueResponseBody>> {
+    : public RequestHandler<
+          lldb_private::protocol::dap::ContinueArguments,
+          llvm::Expected<lldb_private::protocol::dap::ContinueResponseBody>> {
 public:
   using RequestHandler::RequestHandler;
   static llvm::StringLiteral GetCommand() { return "continue"; }
-  llvm::Expected<protocol::ContinueResponseBody>
-  Run(const protocol::ContinueArguments &args) const override;
+  llvm::Expected<lldb_private::protocol::dap::ContinueResponseBody>
+  Run(const lldb_private::protocol::dap::ContinueArguments &args)
+      const override;
 };
 
 class ConfigurationDoneRequestHandler
-    : public RequestHandler<protocol::ConfigurationDoneArguments,
-                            protocol::ConfigurationDoneResponse> {
+    : public RequestHandler<
+          lldb_private::protocol::dap::ConfigurationDoneArguments,
+          lldb_private::protocol::dap::ConfigurationDoneResponse> {
 public:
   using RequestHandler::RequestHandler;
   static llvm::StringLiteral GetCommand() { return "configurationDone"; }
   FeatureSet GetSupportedFeatures() const override {
-    return {protocol::eAdapterFeatureConfigurationDoneRequest};
+    return {
+        lldb_private::protocol::dap::eAdapterFeatureConfigurationDoneRequest};
   }
-  protocol::ConfigurationDoneResponse
-  Run(const protocol::ConfigurationDoneArguments &) const override;
+  lldb_private::protocol::dap::ConfigurationDoneResponse
+  Run(const lldb_private::protocol::dap::ConfigurationDoneArguments &)
+      const override;
 };
 
 class DisconnectRequestHandler
-    : public RequestHandler<std::optional<protocol::DisconnectArguments>,
-                            protocol::DisconnectResponse> {
+    : public RequestHandler<
+          std::optional<lldb_private::protocol::dap::DisconnectArguments>,
+          lldb_private::protocol::dap::DisconnectResponse> {
 public:
   using RequestHandler::RequestHandler;
   static llvm::StringLiteral GetCommand() { return "disconnect"; }
   FeatureSet GetSupportedFeatures() const override {
-    return {protocol::eAdapterFeatureTerminateDebuggee};
+    return {lldb_private::protocol::dap::eAdapterFeatureTerminateDebuggee};
   }
   llvm::Error
-  Run(const std::optional<protocol::DisconnectArguments> &args) const override;
+  Run(const std::optional<lldb_private::protocol::dap::DisconnectArguments>
+          &args) const override;
 };
 
 class EvaluateRequestHandler : public LegacyRequestHandler {
@@ -295,7 +312,7 @@ public:
   static llvm::StringLiteral GetCommand() { return "evaluate"; }
   void operator()(const llvm::json::Object &request) const override;
   FeatureSet GetSupportedFeatures() const override {
-    return {protocol::eAdapterFeatureEvaluateForHovers};
+    return {lldb_private::protocol::dap::eAdapterFeatureEvaluateForHovers};
   }
 };
 
@@ -304,29 +321,31 @@ public:
   using LegacyRequestHandler::LegacyRequestHandler;
   static llvm::StringLiteral GetCommand() { return "exceptionInfo"; }
   FeatureSet GetSupportedFeatures() const override {
-    return {protocol::eAdapterFeatureExceptionInfoRequest};
+    return {lldb_private::protocol::dap::eAdapterFeatureExceptionInfoRequest};
   }
   void operator()(const llvm::json::Object &request) const override;
 };
 
 class InitializeRequestHandler
-    : public RequestHandler<protocol::InitializeRequestArguments,
-                            llvm::Expected<protocol::InitializeResponse>> {
+    : public RequestHandler<
+          lldb_private::protocol::dap::InitializeRequestArguments,
+          llvm::Expected<lldb_private::protocol::dap::InitializeResponse>> {
 public:
   using RequestHandler::RequestHandler;
   static llvm::StringLiteral GetCommand() { return "initialize"; }
-  llvm::Expected<protocol::InitializeResponse>
-  Run(const protocol::InitializeRequestArguments &args) const override;
+  llvm::Expected<lldb_private::protocol::dap::InitializeResponse>
+  Run(const lldb_private::protocol::dap::InitializeRequestArguments &args)
+      const override;
 };
 
 class LaunchRequestHandler
-    : public RequestHandler<protocol::LaunchRequestArguments,
-                            protocol::LaunchResponse> {
+    : public RequestHandler<lldb_private::protocol::dap::LaunchRequestArguments,
+                            lldb_private::protocol::dap::LaunchResponse> {
 public:
   using RequestHandler::RequestHandler;
   static llvm::StringLiteral GetCommand() { return "launch"; }
-  llvm::Error
-  Run(const protocol::LaunchRequestArguments &arguments) const override;
+  llvm::Error Run(const lldb_private::protocol::dap::LaunchRequestArguments
+                      &arguments) const override;
   void PostRun() const override;
 };
 
@@ -338,19 +357,23 @@ public:
 };
 
 class NextRequestHandler
-    : public RequestHandler<protocol::NextArguments, protocol::NextResponse> {
+    : public RequestHandler<lldb_private::protocol::dap::NextArguments,
+                            lldb_private::protocol::dap::NextResponse> {
 public:
   using RequestHandler::RequestHandler;
   static llvm::StringLiteral GetCommand() { return "next"; }
-  llvm::Error Run(const protocol::NextArguments &args) const override;
+  llvm::Error
+  Run(const lldb_private::protocol::dap::NextArguments &args) const override;
 };
 
-class StepInRequestHandler : public RequestHandler<protocol::StepInArguments,
-                                                   protocol::StepInResponse> {
+class StepInRequestHandler
+    : public RequestHandler<lldb_private::protocol::dap::StepInArguments,
+                            lldb_private::protocol::dap::StepInResponse> {
 public:
   using RequestHandler::RequestHandler;
   static llvm::StringLiteral GetCommand() { return "stepIn"; }
-  llvm::Error Run(const protocol::StepInArguments &args) const override;
+  llvm::Error
+  Run(const lldb_private::protocol::dap::StepInArguments &args) const override;
 };
 
 class StepInTargetsRequestHandler : public LegacyRequestHandler {
@@ -358,32 +381,37 @@ public:
   using LegacyRequestHandler::LegacyRequestHandler;
   static llvm::StringLiteral GetCommand() { return "stepInTargets"; }
   FeatureSet GetSupportedFeatures() const override {
-    return {protocol::eAdapterFeatureStepInTargetsRequest};
+    return {lldb_private::protocol::dap::eAdapterFeatureStepInTargetsRequest};
   }
   void operator()(const llvm::json::Object &request) const override;
 };
 
-class StepOutRequestHandler : public RequestHandler<protocol::StepOutArguments,
-                                                    protocol::StepOutResponse> {
+class StepOutRequestHandler
+    : public RequestHandler<lldb_private::protocol::dap::StepOutArguments,
+                            lldb_private::protocol::dap::StepOutResponse> {
 public:
   using RequestHandler::RequestHandler;
   static llvm::StringLiteral GetCommand() { return "stepOut"; }
-  llvm::Error Run(const protocol::StepOutArguments &args) const override;
+  llvm::Error
+  Run(const lldb_private::protocol::dap::StepOutArguments &args) const override;
 };
 
 class SetBreakpointsRequestHandler
     : public RequestHandler<
-          protocol::SetBreakpointsArguments,
-          llvm::Expected<protocol::SetBreakpointsResponseBody>> {
+          lldb_private::protocol::dap::SetBreakpointsArguments,
+          llvm::Expected<
+              lldb_private::protocol::dap::SetBreakpointsResponseBody>> {
 public:
   using RequestHandler::RequestHandler;
   static llvm::StringLiteral GetCommand() { return "setBreakpoints"; }
   FeatureSet GetSupportedFeatures() const override {
-    return {protocol::eAdapterFeatureConditionalBreakpoints,
-            protocol::eAdapterFeatureHitConditionalBreakpoints};
+    return {
+        lldb_private::protocol::dap::eAdapterFeatureConditionalBreakpoints,
+        lldb_private::protocol::dap::eAdapterFeatureHitConditionalBreakpoints};
   }
-  llvm::Expected<protocol::SetBreakpointsResponseBody>
-  Run(const protocol::SetBreakpointsArguments &args) const override;
+  llvm::Expected<lldb_private::protocol::dap::SetBreakpointsResponseBody>
+  Run(const lldb_private::protocol::dap::SetBreakpointsArguments &args)
+      const override;
 };
 
 class SetExceptionBreakpointsRequestHandler : public LegacyRequestHandler {
@@ -391,64 +419,74 @@ public:
   using LegacyRequestHandler::LegacyRequestHandler;
   static llvm::StringLiteral GetCommand() { return "setExceptionBreakpoints"; }
   FeatureSet GetSupportedFeatures() const override {
-    return {protocol::eAdapterFeatureExceptionOptions};
+    return {lldb_private::protocol::dap::eAdapterFeatureExceptionOptions};
   }
   void operator()(const llvm::json::Object &request) const override;
 };
 
 class SetFunctionBreakpointsRequestHandler
     : public RequestHandler<
-          protocol::SetFunctionBreakpointsArguments,
-          llvm::Expected<protocol::SetFunctionBreakpointsResponseBody>> {
+          lldb_private::protocol::dap::SetFunctionBreakpointsArguments,
+          llvm::Expected<lldb_private::protocol::dap::
+                             SetFunctionBreakpointsResponseBody>> {
 public:
   using RequestHandler::RequestHandler;
   static llvm::StringLiteral GetCommand() { return "setFunctionBreakpoints"; }
   FeatureSet GetSupportedFeatures() const override {
-    return {protocol::eAdapterFeatureFunctionBreakpoints};
+    return {lldb_private::protocol::dap::eAdapterFeatureFunctionBreakpoints};
   }
-  llvm::Expected<protocol::SetFunctionBreakpointsResponseBody>
-  Run(const protocol::SetFunctionBreakpointsArguments &args) const override;
+  llvm::Expected<
+      lldb_private::protocol::dap::SetFunctionBreakpointsResponseBody>
+  Run(const lldb_private::protocol::dap::SetFunctionBreakpointsArguments &args)
+      const override;
 };
 
 class DataBreakpointInfoRequestHandler
     : public RequestHandler<
-          protocol::DataBreakpointInfoArguments,
-          llvm::Expected<protocol::DataBreakpointInfoResponseBody>> {
+          lldb_private::protocol::dap::DataBreakpointInfoArguments,
+          llvm::Expected<
+              lldb_private::protocol::dap::DataBreakpointInfoResponseBody>> {
 public:
   using RequestHandler::RequestHandler;
   static llvm::StringLiteral GetCommand() { return "dataBreakpointInfo"; }
-  llvm::Expected<protocol::DataBreakpointInfoResponseBody>
-  Run(const protocol::DataBreakpointInfoArguments &args) const override;
+  llvm::Expected<lldb_private::protocol::dap::DataBreakpointInfoResponseBody>
+  Run(const lldb_private::protocol::dap::DataBreakpointInfoArguments &args)
+      const override;
 };
 
 class SetDataBreakpointsRequestHandler
     : public RequestHandler<
-          protocol::SetDataBreakpointsArguments,
-          llvm::Expected<protocol::SetDataBreakpointsResponseBody>> {
+          lldb_private::protocol::dap::SetDataBreakpointsArguments,
+          llvm::Expected<
+              lldb_private::protocol::dap::SetDataBreakpointsResponseBody>> {
 public:
   using RequestHandler::RequestHandler;
   static llvm::StringLiteral GetCommand() { return "setDataBreakpoints"; }
   FeatureSet GetSupportedFeatures() const override {
-    return {protocol::eAdapterFeatureDataBreakpoints};
+    return {lldb_private::protocol::dap::eAdapterFeatureDataBreakpoints};
   }
-  llvm::Expected<protocol::SetDataBreakpointsResponseBody>
-  Run(const protocol::SetDataBreakpointsArguments &args) const override;
+  llvm::Expected<lldb_private::protocol::dap::SetDataBreakpointsResponseBody>
+  Run(const lldb_private::protocol::dap::SetDataBreakpointsArguments &args)
+      const override;
 };
 
 class SetInstructionBreakpointsRequestHandler
     : public RequestHandler<
-          protocol::SetInstructionBreakpointsArguments,
-          llvm::Expected<protocol::SetInstructionBreakpointsResponseBody>> {
+          lldb_private::protocol::dap::SetInstructionBreakpointsArguments,
+          llvm::Expected<lldb_private::protocol::dap::
+                             SetInstructionBreakpointsResponseBody>> {
 public:
   using RequestHandler::RequestHandler;
   static llvm::StringLiteral GetCommand() {
     return "setInstructionBreakpoints";
   }
   FeatureSet GetSupportedFeatures() const override {
-    return {protocol::eAdapterFeatureInstructionBreakpoints};
+    return {lldb_private::protocol::dap::eAdapterFeatureInstructionBreakpoints};
   }
-  llvm::Expected<protocol::SetInstructionBreakpointsResponseBody>
-  Run(const protocol::SetInstructionBreakpointsArguments &args) const override;
+  llvm::Expected<
+      lldb_private::protocol::dap::SetInstructionBreakpointsResponseBody>
+  Run(const lldb_private::protocol::dap::SetInstructionBreakpointsArguments
+          &args) const override;
 };
 
 class CompileUnitsRequestHandler : public LegacyRequestHandler {
@@ -463,7 +501,7 @@ public:
   using LegacyRequestHandler::LegacyRequestHandler;
   static llvm::StringLiteral GetCommand() { return "modules"; }
   FeatureSet GetSupportedFeatures() const override {
-    return {protocol::eAdapterFeatureModulesRequest};
+    return {lldb_private::protocol::dap::eAdapterFeatureModulesRequest};
   }
   void operator()(const llvm::json::Object &request) const override;
 };
@@ -476,37 +514,42 @@ public:
 };
 
 class ScopesRequestHandler final
-    : public RequestHandler<protocol::ScopesArguments,
-                            llvm::Expected<protocol::ScopesResponseBody>> {
+    : public RequestHandler<
+          lldb_private::protocol::dap::ScopesArguments,
+          llvm::Expected<lldb_private::protocol::dap::ScopesResponseBody>> {
 public:
   using RequestHandler::RequestHandler;
   static llvm::StringLiteral GetCommand() { return "scopes"; }
 
-  llvm::Expected<protocol::ScopesResponseBody>
-  Run(const protocol::ScopesArguments &args) const override;
+  llvm::Expected<lldb_private::protocol::dap::ScopesResponseBody>
+  Run(const lldb_private::protocol::dap::ScopesArguments &args) const override;
 };
 
 class SetVariableRequestHandler final
-    : public RequestHandler<protocol::SetVariableArguments,
-                            llvm::Expected<protocol::SetVariableResponseBody>> {
+    : public RequestHandler<
+          lldb_private::protocol::dap::SetVariableArguments,
+          llvm::Expected<
+              lldb_private::protocol::dap::SetVariableResponseBody>> {
 public:
   using RequestHandler::RequestHandler;
   static llvm::StringLiteral GetCommand() { return "setVariable"; }
   FeatureSet GetSupportedFeatures() const override {
-    return {protocol::eAdapterFeatureSetVariable};
+    return {lldb_private::protocol::dap::eAdapterFeatureSetVariable};
   }
-  llvm::Expected<protocol::SetVariableResponseBody>
-  Run(const protocol::SetVariableArguments &args) const override;
+  llvm::Expected<lldb_private::protocol::dap::SetVariableResponseBody>
+  Run(const lldb_private::protocol::dap::SetVariableArguments &args)
+      const override;
 };
 
 class SourceRequestHandler final
-    : public RequestHandler<protocol::SourceArguments,
-                            llvm::Expected<protocol::SourceResponseBody>> {
+    : public RequestHandler<
+          lldb_private::protocol::dap::SourceArguments,
+          llvm::Expected<lldb_private::protocol::dap::SourceResponseBody>> {
 public:
   using RequestHandler::RequestHandler;
   static llvm::StringLiteral GetCommand() { return "source"; }
-  llvm::Expected<protocol::SourceResponseBody>
-  Run(const protocol::SourceArguments &args) const override;
+  llvm::Expected<lldb_private::protocol::dap::SourceResponseBody>
+  Run(const lldb_private::protocol::dap::SourceArguments &args) const override;
 };
 
 class StackTraceRequestHandler : public LegacyRequestHandler {
@@ -515,18 +558,20 @@ public:
   static llvm::StringLiteral GetCommand() { return "stackTrace"; }
   void operator()(const llvm::json::Object &request) const override;
   FeatureSet GetSupportedFeatures() const override {
-    return {protocol::eAdapterFeatureDelayedStackTraceLoading};
+    return {
+        lldb_private::protocol::dap::eAdapterFeatureDelayedStackTraceLoading};
   }
 };
 
 class ThreadsRequestHandler
-    : public RequestHandler<protocol::ThreadsArguments,
-                            llvm::Expected<protocol::ThreadsResponseBody>> {
+    : public RequestHandler<
+          lldb_private::protocol::dap::ThreadsArguments,
+          llvm::Expected<lldb_private::protocol::dap::ThreadsResponseBody>> {
 public:
   using RequestHandler::RequestHandler;
   static llvm::StringLiteral GetCommand() { return "threads"; }
-  llvm::Expected<protocol::ThreadsResponseBody>
-  Run(const protocol::ThreadsArguments &) const override;
+  llvm::Expected<lldb_private::protocol::dap::ThreadsResponseBody>
+  Run(const lldb_private::protocol::dap::ThreadsArguments &) const override;
 };
 
 class VariablesRequestHandler : public LegacyRequestHandler {
@@ -544,16 +589,19 @@ public:
 };
 
 class DisassembleRequestHandler final
-    : public RequestHandler<protocol::DisassembleArguments,
-                            llvm::Expected<protocol::DisassembleResponseBody>> {
+    : public RequestHandler<
+          lldb_private::protocol::dap::DisassembleArguments,
+          llvm::Expected<
+              lldb_private::protocol::dap::DisassembleResponseBody>> {
 public:
   using RequestHandler::RequestHandler;
   static llvm::StringLiteral GetCommand() { return "disassemble"; }
   FeatureSet GetSupportedFeatures() const override {
-    return {protocol::eAdapterFeatureDisassembleRequest};
+    return {lldb_private::protocol::dap::eAdapterFeatureDisassembleRequest};
   }
-  llvm::Expected<protocol::DisassembleResponseBody>
-  Run(const protocol::DisassembleArguments &args) const override;
+  llvm::Expected<lldb_private::protocol::dap::DisassembleResponseBody>
+  Run(const lldb_private::protocol::dap::DisassembleArguments &args)
+      const override;
 };
 
 class ReadMemoryRequestHandler : public LegacyRequestHandler {
@@ -561,20 +609,22 @@ public:
   using LegacyRequestHandler::LegacyRequestHandler;
   static llvm::StringLiteral GetCommand() { return "readMemory"; }
   FeatureSet GetSupportedFeatures() const override {
-    return {protocol::eAdapterFeatureReadMemoryRequest};
+    return {lldb_private::protocol::dap::eAdapterFeatureReadMemoryRequest};
   }
   void operator()(const llvm::json::Object &request) const override;
 };
 
-class CancelRequestHandler : public RequestHandler<protocol::CancelArguments,
-                                                   protocol::CancelResponse> {
+class CancelRequestHandler
+    : public RequestHandler<lldb_private::protocol::dap::CancelArguments,
+                            lldb_private::protocol::dap::CancelResponse> {
 public:
   using RequestHandler::RequestHandler;
   static llvm::StringLiteral GetCommand() { return "cancel"; }
   FeatureSet GetSupportedFeatures() const override {
-    return {protocol::eAdapterFeatureCancelRequest};
+    return {lldb_private::protocol::dap::eAdapterFeatureCancelRequest};
   }
-  llvm::Error Run(const protocol::CancelArguments &args) const override;
+  llvm::Error
+  Run(const lldb_private::protocol::dap::CancelArguments &args) const override;
 };
 
 /// A request used in testing to get the details on all breakpoints that are

@@ -8,24 +8,24 @@
 
 #include "DAP.h"
 #include "EventHelper.h"
-#include "Protocol/ProtocolRequests.h"
 #include "ProtocolUtils.h"
 #include "RequestHandler.h"
 #include "lldb/API/SBDebugger.h"
 #include "lldb/API/SBDefines.h"
+#include "lldb/Protocol/DAP/ProtocolRequests.h"
 #include "llvm/Support/Error.h"
 #include "llvm/Support/raw_ostream.h"
 
 using namespace llvm;
-using namespace lldb_dap::protocol;
+using namespace lldb_private::protocol;
 
 namespace lldb_dap {
 
 /// The request retrieves a list of all threads.
-Expected<ThreadsResponseBody>
-ThreadsRequestHandler::Run(const ThreadsArguments &) const {
+Expected<dap::ThreadsResponseBody>
+ThreadsRequestHandler::Run(const dap::ThreadsArguments &) const {
   lldb::SBProcess process = dap.target.GetProcess();
-  std::vector<Thread> threads;
+  std::vector<dap::Thread> threads;
 
   // Client requests the baseline of currently existing threads after
   // a successful launch or attach by sending a 'threads' request
@@ -46,7 +46,7 @@ ThreadsRequestHandler::Run(const ThreadsArguments &) const {
   if (threads.size() == 0)
     return make_error<DAPError>("failed to retrieve threads from process");
 
-  return ThreadsResponseBody{threads};
+  return dap::ThreadsResponseBody{threads};
 }
 
 } // namespace lldb_dap

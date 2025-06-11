@@ -11,16 +11,16 @@
 #include "EventHelper.h"
 #include "JSONUtils.h"
 #include "LLDBUtils.h"
-#include "Protocol/ProtocolRequests.h"
 #include "RequestHandler.h"
 #include "lldb/API/SBTarget.h"
+#include "lldb/Protocol/DAP/ProtocolRequests.h"
 
 using namespace lldb_dap;
-using namespace lldb_dap::protocol;
+using namespace lldb_private::protocol;
 
 /// Initialize request; value of command field is 'initialize'.
-llvm::Expected<InitializeResponse> InitializeRequestHandler::Run(
-    const InitializeRequestArguments &arguments) const {
+llvm::Expected<dap::InitializeResponse> InitializeRequestHandler::Run(
+    const dap::InitializeRequestArguments &arguments) const {
   dap.clientFeatures = arguments.supportedFeatures;
 
   // Do not source init files until in/out/err are configured.
@@ -58,7 +58,7 @@ llvm::Expected<InitializeResponse> InitializeRequestHandler::Run(
   auto cmd = dap.debugger.GetCommandInterpreter().AddMultiwordCommand(
       "lldb-dap", "Commands for managing lldb-dap.");
   if (arguments.supportedFeatures.contains(
-          eClientFeatureStartDebuggingRequest)) {
+          dap::eClientFeatureStartDebuggingRequest)) {
     cmd.AddCommand(
         "start-debugging", new StartDebuggingCommand(dap),
         "Sends a startDebugging request from the debug adapter to the client "
@@ -70,7 +70,8 @@ llvm::Expected<InitializeResponse> InitializeRequestHandler::Run(
   cmd.AddCommand("send-event", new SendEventCommand(dap),
                  "Sends an DAP event to the client.");
 
-  if (arguments.supportedFeatures.contains(eClientFeatureProgressReporting))
+  if (arguments.supportedFeatures.contains(
+          dap::eClientFeatureProgressReporting))
     dap.StartProgressEventThread();
 
   // Start our event thread so we can receive events from the debugger, target,

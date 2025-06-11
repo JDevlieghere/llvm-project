@@ -10,11 +10,11 @@
 #define LLDB_TOOLS_LLDB_DAP_JSONUTILS_H
 
 #include "DAPForward.h"
-#include "Protocol/ProtocolTypes.h"
 #include "lldb/API/SBCompileUnit.h"
 #include "lldb/API/SBFormat.h"
 #include "lldb/API/SBType.h"
 #include "lldb/API/SBValue.h"
+#include "lldb/Protocol/DAP/ProtocolTypes.h"
 #include "lldb/lldb-types.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/StringRef.h"
@@ -233,7 +233,7 @@ llvm::json::Object CreateEventObject(const llvm::StringRef event_name);
 /// \return
 ///     A "ExceptionBreakpointsFilter" JSON object with that follows
 ///     the formal JSON definition outlined by Microsoft.
-protocol::ExceptionBreakpointsFilter
+lldb_private::protocol::dap::ExceptionBreakpointsFilter
 CreateExceptionBreakpointFilter(const ExceptionBreakpoint &bp);
 
 /// Create a "StackFrame" object for a LLDB frame object.

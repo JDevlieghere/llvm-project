@@ -8,7 +8,7 @@
 
 #include "Transport.h"
 #include "DAPLog.h"
-#include "Protocol/ProtocolBase.h"
+#include "lldb/Protocol/DAP/ProtocolBase.h"
 #include "lldb/Utility/IOObject.h"
 #include "lldb/Utility/SelectHelper.h"
 #include "lldb/Utility/Status.h"
@@ -24,8 +24,8 @@
 using namespace llvm;
 using namespace lldb;
 using namespace lldb_private;
+using namespace lldb_private::protocol::dap;
 using namespace lldb_dap;
-using namespace lldb_dap::protocol;
 
 /// ReadFull attempts to read the specified number of bytes. If EOF is
 /// encountered, an empty string is returned.

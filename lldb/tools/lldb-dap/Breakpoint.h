@@ -26,7 +26,7 @@ public:
 
   void SetCondition() override;
   void SetHitCondition() override;
-  protocol::Breakpoint ToProtocolBreakpoint() override;
+  lldb_private::protocol::dap::Breakpoint ToProtocolBreakpoint() override;
 
   bool MatchesName(const char *name);
   void SetBreakpoint();

@@ -27,16 +27,18 @@
 #include <mutex>
 #include <utility>
 
+using namespace lldb_private::protocol;
+
 namespace lldb_dap {
 
 SourceBreakpoint::SourceBreakpoint(DAP &dap,
-                                   const protocol::SourceBreakpoint &breakpoint)
+                                   const dap::SourceBreakpoint &breakpoint)
     : Breakpoint(dap, breakpoint.condition, breakpoint.hitCondition),
       m_log_message(breakpoint.logMessage.value_or("")),
       m_line(breakpoint.line),
       m_column(breakpoint.column.value_or(LLDB_INVALID_COLUMN_NUMBER)) {}
 
-llvm::Error SourceBreakpoint::SetBreakpoint(const protocol::Source &source) {
+llvm::Error SourceBreakpoint::SetBreakpoint(const dap::Source &source) {
   lldb::SBMutex lock = m_dap.GetAPIMutex();
   std::lock_guard<lldb::SBMutex> guard(lock);
 

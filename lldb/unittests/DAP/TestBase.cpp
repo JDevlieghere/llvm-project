@@ -7,12 +7,12 @@
 //===----------------------------------------------------------------------===//
 
 #include "TestBase.h"
-#include "Protocol/ProtocolBase.h"
 #include "TestingSupport/TestUtilities.h"
 #include "lldb/API/SBDefines.h"
 #include "lldb/API/SBStructuredData.h"
 #include "lldb/Host/File.h"
 #include "lldb/Host/Pipe.h"
+#include "lldb/Protocol/DAP/ProtocolBase.h"
 #include "lldb/lldb-forward.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Testing/Support/Error.h"
@@ -22,7 +22,7 @@
 using namespace llvm;
 using namespace lldb;
 using namespace lldb_dap;
-using namespace lldb_dap::protocol;
+using namespace lldb_private::protocol::dap;
 using namespace lldb_dap_tests;
 using lldb_private::File;
 using lldb_private::NativeFile;

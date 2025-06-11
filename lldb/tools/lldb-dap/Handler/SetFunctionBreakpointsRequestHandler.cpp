@@ -10,6 +10,8 @@
 #include "EventHelper.h"
 #include "RequestHandler.h"
 
+using namespace lldb_private::protocol;
+
 namespace lldb_dap {
 
 /// Replaces all existing function breakpoints with new function breakpoints.
@@ -17,10 +19,10 @@ namespace lldb_dap {
 /// When a function breakpoint is hit, a stopped event (with reason function
 /// breakpoint) is generated. Clients should only call this request if the
 /// corresponding capability supportsFunctionBreakpoints is true.
-llvm::Expected<protocol::SetFunctionBreakpointsResponseBody>
+llvm::Expected<dap::SetFunctionBreakpointsResponseBody>
 SetFunctionBreakpointsRequestHandler::Run(
-    const protocol::SetFunctionBreakpointsArguments &args) const {
-  std::vector<protocol::Breakpoint> response_breakpoints;
+    const dap::SetFunctionBreakpointsArguments &args) const {
+  std::vector<dap::Breakpoint> response_breakpoints;
 
   // Disable any function breakpoints that aren't in this request.
   // There is no call to remove function breakpoints other than calling this
@@ -49,7 +51,7 @@ SetFunctionBreakpointsRequestHandler::Run(
     dap.function_breakpoints.erase(name);
   }
 
-  return protocol::SetFunctionBreakpointsResponseBody{
+  return dap::SetFunctionBreakpointsResponseBody{
       std::move(response_breakpoints)};
 }
 

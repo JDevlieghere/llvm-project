@@ -9,13 +9,13 @@
 #include "DAP.h"
 #include "EventHelper.h"
 #include "LLDBUtils.h"
-#include "Protocol/ProtocolTypes.h"
 #include "RequestHandler.h"
+#include "lldb/Protocol/DAP/ProtocolTypes.h"
 #include "llvm/Support/Error.h"
 
 using namespace llvm;
 using namespace lldb;
-using namespace lldb_dap::protocol;
+using namespace lldb_private::protocol;
 
 namespace lldb_dap {
 
@@ -26,7 +26,7 @@ namespace lldb_dap {
 /// argument to true prevents other suspended threads from resuming. The debug
 /// adapter first sends the response and then a `stopped` event (with reason
 /// `step`) after the step has completed.
-Error NextRequestHandler::Run(const NextArguments &args) const {
+Error NextRequestHandler::Run(const dap::NextArguments &args) const {
   lldb::SBThread thread = dap.GetLLDBThread(args.threadId);
   if (!thread.IsValid())
     return make_error<DAPError>("invalid thread");
@@ -38,7 +38,7 @@ Error NextRequestHandler::Run(const NextArguments &args) const {
   // "threadCausedFocus" boolean value in the "stopped" events.
   dap.focus_tid = thread.GetThreadID();
   lldb::SBError error;
-  if (args.granularity == eSteppingGranularityInstruction) {
+  if (args.granularity == dap::eSteppingGranularityInstruction) {
     thread.StepInstruction(/*step_over=*/true, error);
   } else {
     thread.StepOver(args.singleThread ? eOnlyThisThread : eOnlyDuringStepping,

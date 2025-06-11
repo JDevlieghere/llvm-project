@@ -9,12 +9,12 @@
 #include "DAP.h"
 #include "EventHelper.h"
 #include "LLDBUtils.h"
-#include "Protocol/ProtocolRequests.h"
 #include "RequestHandler.h"
+#include "lldb/Protocol/DAP/ProtocolRequests.h"
 #include "llvm/Support/Error.h"
 
 using namespace llvm;
-using namespace lldb_dap::protocol;
+using namespace lldb_private::protocol;
 
 namespace lldb_dap {
 
@@ -28,7 +28,7 @@ namespace lldb_dap {
 ///
 /// The debug adapter first sends the response and then a `stopped` event (with
 /// reason `step`) after the step has completed."
-Error StepOutRequestHandler::Run(const StepOutArguments &arguments) const {
+Error StepOutRequestHandler::Run(const dap::StepOutArguments &arguments) const {
   lldb::SBThread thread = dap.GetLLDBThread(arguments.threadId);
   if (!thread.IsValid())
     return make_error<DAPError>("invalid thread");
