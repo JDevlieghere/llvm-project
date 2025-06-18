@@ -27,9 +27,9 @@ using namespace lldb_private;
 
 /// ReadFull attempts to read the specified number of bytes. If EOF is
 /// encountered, an empty string is returned.
-Expected<std::string>
-JSONTransport::ReadFull(IOObject &descriptor, size_t length,
-                        const Timeout<std::micro> &timeout) const {
+static Expected<std::string>
+ReadFull(IOObject &descriptor, size_t length,
+                        const Timeout<std::micro> &timeout) {
   if (!descriptor.IsValid())
     return llvm::make_error<TransportInvalidError>();
 
@@ -70,19 +70,56 @@ JSONTransport::ReadFull(IOObject &descriptor, size_t length,
 Expected<std::string>
 JSONTransport::ReadUntil(IOObject &descriptor, StringRef delimiter,
                          const Timeout<std::micro> &timeout) {
-  auto clear_buffer = llvm::make_scope_exit([=] { m_buffer.clear(); });
-  while (!llvm::StringRef(m_buffer).ends_with(delimiter)) {
+  while(true) {
+    auto [head, tail] = llvm::StringRef(m_buffer).split(delimiter);
+
+    if (!head.empty()) {
+      std::string result = head.str();
+      m_buffer = tail.str();
+      return result;
+    }
+
     Expected<std::string> next =
-        ReadFull(descriptor, m_buffer.empty() ? delimiter.size() : 1, timeout);
+        ReadFull(descriptor, kReadSize, timeout);
     if (next.errorIsA<TransportTimeoutError>() && timeout &&
         *timeout == std::chrono::microseconds::zero())
-      clear_buffer.release();
-    if (auto Err = next.takeError())
-      return std::move(Err);
+      return next.takeError();
+
+    if (auto error = next.takeError()) {
+      m_buffer.clear();
+      return std::move(error);
+    }
+
     m_buffer += *next;
   }
-  return m_buffer.substr(0, m_buffer.size() - delimiter.size());
+
+  llvm_unreachable("loop always exits");
 }
+
+Expected<std::string> JSONTransport::ReadBytes(IOObject &descriptor,
+                                      size_t length,
+                                      const Timeout<std::micro> &timeout) {
+  while(m_buffer.size() < length) {
+    Expected<std::string> next =
+        ReadFull(descriptor, kReadSize, timeout);
+    if (next.errorIsA<TransportTimeoutError>() && timeout &&
+        *timeout == std::chrono::microseconds::zero())
+      return next.takeError();
+
+    if (auto error = next.takeError()) {
+      m_buffer.clear();
+      return std::move(error);
+    }
+
+    m_buffer += *next;
+  }
+
+  llvm::StringRef buffer(m_buffer);
+  std::string result = buffer.drop_back(length).str();
+  m_buffer = buffer.str();
+  return result;
+}
+
 
 JSONTransport::JSONTransport(IOObjectSP input, IOObjectSP output)
     : m_input(std::move(input)), m_output(std::move(output)) {}
@@ -102,7 +139,7 @@ HTTPDelimitedJSONTransport::ReadImpl(const Timeout<std::micro> &timeout) {
 
   IOObject *input = m_input.get();
   Expected<std::string> message_header =
-      ReadFull(*input, kHeaderContentLength.size(), timeout);
+      ReadBytes(*input, kHeaderContentLength.size(), timeout);
   if (!message_header)
     return message_header.takeError();
   if (*message_header != kHeaderContentLength)
@@ -124,7 +161,7 @@ HTTPDelimitedJSONTransport::ReadImpl(const Timeout<std::micro> &timeout) {
     return createStringError(
         formatv("invalid content length {0}", *raw_length).str());
 
-  Expected<std::string> raw_json = ReadFull(*input, length, timeout);
+  Expected<std::string> raw_json = ReadBytes(*input, length, timeout);
   if (!raw_json)
     return handleErrors(
         raw_json.takeError(), [&](const TransportEOFError &E) -> llvm::Error {

@@ -87,11 +87,7 @@ public:
   /// Reads the next message from the input stream.
   template <typename T>
   llvm::Expected<T> Read(const Timeout<std::micro> &timeout = std::nullopt) {
-    auto clear_buffer = llvm::make_scope_exit([=] { m_buffer.clear(); });
     llvm::Expected<std::string> message = ReadImpl(timeout);
-    if (message.errorIsA<TransportTimeoutError>() && timeout &&
-        *timeout == std::chrono::microseconds::zero())
-      clear_buffer.release();
     if (!message)
       return message.takeError();
     return llvm::json::parse<T>(/*JSON=*/*message);
@@ -104,18 +100,20 @@ protected:
   virtual llvm::Expected<std::string>
   ReadImpl(const Timeout<std::micro> &timeout) = 0;
 
-  llvm::Expected<std::string>
-  ReadFull(IOObject &descriptor, size_t length,
-           const Timeout<std::micro> &timeout) const;
-
   llvm::Expected<std::string> ReadUntil(IOObject &descriptor,
                                         llvm::StringRef delimiter,
+                                        const Timeout<std::micro> &timeout);
+
+  llvm::Expected<std::string> ReadBytes(IOObject &descriptor,
+                                        size_t length,
                                         const Timeout<std::micro> &timeout);
 
   lldb::IOObjectSP m_input;
   lldb::IOObjectSP m_output;
 
   std::string m_buffer;
+
+  static constexpr size_t kReadSize = 1024;
 };
 
 /// A transport class for JSON with a HTTP header.
