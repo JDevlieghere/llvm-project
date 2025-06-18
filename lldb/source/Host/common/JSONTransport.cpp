@@ -27,9 +27,9 @@ using namespace lldb_private;
 
 /// ReadFull attempts to read the specified number of bytes. If EOF is
 /// encountered, an empty string is returned.
-Expected<std::string> JSONTransport::ReadFull(
-    IOObject &descriptor, size_t length,
-    std::optional<std::chrono::microseconds> timeout) const {
+Expected<std::string>
+JSONTransport::ReadFull(IOObject &descriptor, size_t length,
+                        const Timeout<std::micro> &timeout) const {
   if (!descriptor.IsValid())
     return llvm::make_error<TransportInvalidError>();
 
@@ -69,15 +69,14 @@ Expected<std::string> JSONTransport::ReadFull(
 
 Expected<std::string>
 JSONTransport::ReadUntil(IOObject &descriptor, StringRef delimiter,
-                         std::optional<std::chrono::microseconds> timeout) {
-  if (!timeout || *timeout != std::chrono::microseconds::zero()) {
-    m_buffer.clear();
-    m_buffer.reserve(delimiter.size() + 1);
-  }
-
+                         const Timeout<std::micro> &timeout) {
+  auto clear_buffer = llvm::make_scope_exit([=] { m_buffer.clear(); });
   while (!llvm::StringRef(m_buffer).ends_with(delimiter)) {
     Expected<std::string> next =
         ReadFull(descriptor, m_buffer.empty() ? delimiter.size() : 1, timeout);
+    if (next.errorIsA<TransportTimeoutError>() && timeout &&
+        *timeout == std::chrono::microseconds::zero())
+      clear_buffer.release();
     if (auto Err = next.takeError())
       return std::move(Err);
     m_buffer += *next;
@@ -92,8 +91,8 @@ void JSONTransport::Log(llvm::StringRef message) {
   LLDB_LOG(GetLog(LLDBLog::Host), "{0}", message);
 }
 
-Expected<std::string> HTTPDelimitedJSONTransport::ReadImpl(
-    std::optional<std::chrono::microseconds> timeout) {
+Expected<std::string>
+HTTPDelimitedJSONTransport::ReadImpl(const Timeout<std::micro> &timeout) {
   if (!m_input || !m_input->IsValid())
     return llvm::make_error<TransportInvalidError>();
 
@@ -151,7 +150,7 @@ Error HTTPDelimitedJSONTransport::WriteImpl(const std::string &message) {
 }
 
 Expected<std::string>
-JSONRPCTransport::ReadImpl(std::optional<std::chrono::microseconds> timeout) {
+JSONRPCTransport::ReadImpl(const Timeout<std::micro> &timeout) {
   if (!m_input || !m_input->IsValid())
     return make_error<TransportInvalidError>();
 

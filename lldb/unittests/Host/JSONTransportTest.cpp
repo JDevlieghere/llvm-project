@@ -12,6 +12,7 @@
 
 using namespace llvm;
 using namespace lldb_private;
+using namespace std::chrono;
 
 namespace {
 template <typename T> class JSONTransportTest : public PipeTest {
@@ -27,6 +28,19 @@ protected:
         std::make_shared<NativeFile>(output.GetWriteFileDescriptor(),
                                      File::eOpenOptionWriteOnly,
                                      NativeFile::Unowned));
+  }
+
+  template <typename V> llvm::Expected<V> ReadNonBlocking() {
+    while (true) {
+      llvm::Expected<V> result =
+          transport->template Read<V>(std::chrono::microseconds::zero());
+      if (result.template errorIsA<TransportTimeoutError>()) {
+        llvm::consumeError(result.takeError());
+        continue;
+      }
+      return result;
+    }
+    llvm_unreachable("loop returns or times out");
   }
 };
 
@@ -162,26 +176,39 @@ TEST_F(HTTPDelimitedJSONTransportTest, NonBlockingRead) {
 }
 
 TEST_F(JSONRPCTransportTest, NonBlockingRead) {
-  llvm::StringRef head = R"({"str")";
-  llvm::StringRef tail = R"(: "foo"})"
-                         "\n";
+  llvm::StringRef chunk1 = R"({"str")";
+  llvm::StringRef chunk2 = R"(: "foo"})"
+                           "\n";
 
-  ASSERT_THAT_EXPECTED(input.Write(head.data(), head.size()), Succeeded());
+  ASSERT_THAT_EXPECTED(input.Write(chunk1.data(), chunk1.size()), Succeeded());
   ASSERT_THAT_EXPECTED(
       transport->Read<JSONTestType>(std::chrono::microseconds::zero()),
       Failed<TransportTimeoutError>());
 
-  ASSERT_THAT_EXPECTED(input.Write(tail.data(), tail.size()), Succeeded());
-  while (true) {
-    llvm::Expected<JSONTestType> result =
-        transport->Read<JSONTestType>(std::chrono::microseconds::zero());
-    if (result.errorIsA<TransportTimeoutError>()) {
-      llvm::consumeError(result.takeError());
-      continue;
-    }
-    ASSERT_THAT_EXPECTED(result, HasValue(testing::FieldsAre(/*str=*/"foo")));
-    break;
-  }
+  ASSERT_THAT_EXPECTED(input.Write(chunk2.data(), chunk2.size()), Succeeded());
+  ASSERT_THAT_EXPECTED(ReadNonBlocking<JSONTestType>(),
+                       HasValue(testing::FieldsAre(/*str=*/"foo")));
+}
+
+TEST_F(JSONRPCTransportTest, NonBlockingInvalidRead) {
+  llvm::StringRef chunk1 = R"({"str")"
+                           "\n";
+  llvm::StringRef chunk2 = R"(: "foo"})"
+                           "\n";
+  llvm::StringRef chunk3 = R"({"str": "foo"})"
+                           "\n";
+
+  ASSERT_THAT_EXPECTED(input.Write(chunk1.data(), chunk1.size()), Succeeded());
+  ASSERT_THAT_EXPECTED(ReadNonBlocking<JSONTestType>(),
+                       Failed<json::ParseError>());
+
+  ASSERT_THAT_EXPECTED(input.Write(chunk2.data(), chunk2.size()), Succeeded());
+  ASSERT_THAT_EXPECTED(ReadNonBlocking<JSONTestType>(),
+                       Failed<json::ParseError>());
+
+  ASSERT_THAT_EXPECTED(input.Write(chunk3.data(), chunk3.size()), Succeeded());
+  ASSERT_THAT_EXPECTED(ReadNonBlocking<JSONTestType>(),
+                       HasValue(testing::FieldsAre(/*str=*/"foo")));
 }
 
 TEST_F(HTTPDelimitedJSONTransportTest, ReadWithTimeout) {

@@ -13,12 +13,13 @@
 #ifndef LLDB_HOST_JSONTRANSPORT_H
 #define LLDB_HOST_JSONTRANSPORT_H
 
+#include "lldb/Utility/Timeout.h"
 #include "lldb/lldb-forward.h"
+#include "llvm/ADT/ScopeExit.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/Error.h"
 #include "llvm/Support/FormatVariadic.h"
 #include "llvm/Support/JSON.h"
-#include <chrono>
 #include <system_error>
 
 namespace lldb_private {
@@ -85,9 +86,12 @@ public:
 
   /// Reads the next message from the input stream.
   template <typename T>
-  llvm::Expected<T>
-  Read(std::optional<std::chrono::microseconds> timeout = std::nullopt) {
+  llvm::Expected<T> Read(const Timeout<std::micro> &timeout = std::nullopt) {
+    auto clear_buffer = llvm::make_scope_exit([=] { m_buffer.clear(); });
     llvm::Expected<std::string> message = ReadImpl(timeout);
+    if (message.errorIsA<TransportTimeoutError>() && timeout &&
+        *timeout == std::chrono::microseconds::zero())
+      clear_buffer.release();
     if (!message)
       return message.takeError();
     return llvm::json::parse<T>(/*JSON=*/*message);
@@ -98,15 +102,15 @@ protected:
 
   virtual llvm::Error WriteImpl(const std::string &message) = 0;
   virtual llvm::Expected<std::string>
-  ReadImpl(std::optional<std::chrono::microseconds> timeout) = 0;
+  ReadImpl(const Timeout<std::micro> &timeout) = 0;
 
   llvm::Expected<std::string>
   ReadFull(IOObject &descriptor, size_t length,
-           std::optional<std::chrono::microseconds> timeout) const;
+           const Timeout<std::micro> &timeout) const;
 
-  llvm::Expected<std::string>
-  ReadUntil(IOObject &descriptor, llvm::StringRef delimiter,
-            std::optional<std::chrono::microseconds> timeout);
+  llvm::Expected<std::string> ReadUntil(IOObject &descriptor,
+                                        llvm::StringRef delimiter,
+                                        const Timeout<std::micro> &timeout);
 
   lldb::IOObjectSP m_input;
   lldb::IOObjectSP m_output;
@@ -124,7 +128,7 @@ public:
 protected:
   virtual llvm::Error WriteImpl(const std::string &message) override;
   virtual llvm::Expected<std::string>
-  ReadImpl(std::optional<std::chrono::microseconds> timeout) override;
+  ReadImpl(const Timeout<std::micro> &timeout) override;
 
   // FIXME: Support any header.
   static constexpr llvm::StringLiteral kHeaderContentLength =
@@ -142,7 +146,7 @@ public:
 protected:
   virtual llvm::Error WriteImpl(const std::string &message) override;
   virtual llvm::Expected<std::string>
-  ReadImpl(std::optional<std::chrono::microseconds> timeout) override;
+  ReadImpl(const Timeout<std::micro> &timeout) override;
 
   static constexpr llvm::StringLiteral kMessageSeparator = "\n";
 };
