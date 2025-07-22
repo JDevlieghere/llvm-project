@@ -31,6 +31,7 @@
 #include "lldb/Core/ThreadSafeValue.h"
 #include "lldb/Core/ThreadedCommunication.h"
 #include "lldb/Core/UserSettingsController.h"
+#include "lldb/Expression/DWARFExpression.h"
 #include "lldb/Host/HostThread.h"
 #include "lldb/Host/ProcessLaunchInfo.h"
 #include "lldb/Host/ProcessRunLock.h"
