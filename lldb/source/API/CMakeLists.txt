@@ -5,16 +5,6 @@ if(LLDB_BUILD_FRAMEWORK)
   set(option_framework FRAMEWORK)
 endif()
 
-if(LLDB_ENABLE_PYTHON)
-  if (APPLE AND LLVM_ENABLE_LOCAL_SUBMODULE_VISIBILITY)
-    # Work around an issue with the Python headers, which have a modular include
-    # inside an extern "C" block.
-    remove_module_flags()
-  endif()
-  get_target_property(python_bindings_dir swig_wrapper_python BINARY_DIR)
-  set(lldb_python_wrapper ${python_bindings_dir}/LLDBWrapPython.cpp)
-endif()
-
 if(LLDB_ENABLE_LUA)
   get_target_property(lua_bindings_dir swig_wrapper_lua BINARY_DIR)
   set(lldb_lua_wrapper ${lua_bindings_dir}/LLDBWrapLua.cpp)
@@ -123,7 +113,6 @@ add_lldb_library(liblldb SHARED ${option_framework}
   SBWatchpoint.cpp
   SBWatchpointOptions.cpp
   SystemInitializerFull.cpp
-  ${lldb_python_wrapper}
   ${lldb_lua_wrapper}
 
   ADDITIONAL_HEADER_DIRS
@@ -150,41 +139,6 @@ add_lldb_library(liblldb SHARED ${option_framework}
 
   ${option_install_prefix}
 )
-
-# lib/pythonX.Y/dist-packages/lldb/_lldb.so is a symlink to lib/liblldb.so,
-# which depends on lib/libLLVM*.so (BUILD_SHARED_LIBS) or lib/libLLVM-10git.so
-# (LLVM_LINK_LLVM_DYLIB). Add an additional rpath $ORIGIN/../../../../lib so
-# that _lldb.so can be loaded from Python.
-if(LLDB_ENABLE_PYTHON AND (BUILD_SHARED_LIBS OR LLVM_LINK_LLVM_DYLIB) AND UNIX AND NOT APPLE)
-  set_property(TARGET liblldb APPEND PROPERTY INSTALL_RPATH "\$ORIGIN/../../../../lib${LLVM_LIBDIR_SUFFIX}")
-endif()
-
-if(Python3_RPATH)
-  set_property(TARGET liblldb APPEND PROPERTY INSTALL_RPATH "${Python3_RPATH}")
-  set_property(TARGET liblldb APPEND PROPERTY BUILD_RPATH   "${Python3_RPATH}")
-endif()
-
-
-if(LLDB_ENABLE_PYTHON)
-  add_dependencies(liblldb swig_wrapper_python)
-
-  if (MSVC)
-    set_property(SOURCE ${lldb_python_wrapper} APPEND_STRING PROPERTY COMPILE_FLAGS " /W0")
-  else()
-    set_property(SOURCE ${lldb_python_wrapper} APPEND_STRING PROPERTY COMPILE_FLAGS " -w")
-  endif()
-
-  set_source_files_properties(${lldb_python_wrapper} PROPERTIES GENERATED ON)
-  if (CLANG_CL)
-    set_property(SOURCE ${lldb_python_wrapper} APPEND_STRING
-      PROPERTY COMPILE_FLAGS " -Wno-unused-function")
-  endif()
-  if (LLVM_COMPILER_IS_GCC_COMPATIBLE AND
-      NOT "${CMAKE_SYSTEM_NAME}" MATCHES "Darwin")
-    set_property(SOURCE ${lldb_python_wrapper} APPEND_STRING
-      PROPERTY COMPILE_FLAGS " -Wno-sequence-point -Wno-cast-qual")
-  endif ()
-endif()
 
 if(LLDB_ENABLE_LUA)
   add_dependencies(liblldb swig_wrapper_lua)
@@ -342,7 +296,7 @@ foreach(header
   add_custom_command(
     OUTPUT ${staged_header}
     COMMAND ${copy_command}
-    DEPENDS ${header}     
+    DEPENDS ${header}
     COMMENT "LLDB headers: stage LLDB headers in include directory")
 
   list(APPEND lldb_staged_headers ${staged_header})

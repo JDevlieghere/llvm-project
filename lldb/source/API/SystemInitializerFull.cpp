@@ -32,7 +32,7 @@
 #define LLDB_PLUGIN(p) LLDB_PLUGIN_DECLARE(p)
 #include "Plugins/Plugins.def"
 
-#if LLDB_ENABLE_PYTHON
+#if 0 // LLDB_ENABLE_PYTHON
 #include "Plugins/ScriptInterpreter/Python/ScriptInterpreterPython.h"
 
 constexpr lldb_private::HostInfo::SharedLibraryDirectoryHelper
