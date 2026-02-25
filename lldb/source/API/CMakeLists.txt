@@ -11,6 +11,13 @@ if(LLDB_ENABLE_PYTHON)
     # inside an extern "C" block.
     remove_module_flags()
   endif()
+  get_target_property(python_bindings_dir swig_wrapper_python BINARY_DIR)
+  set(lldb_python_wrapper ${python_bindings_dir}/LLDBWrapPython.cpp)
+endif()
+
+if(LLDB_ENABLE_LUA)
+  get_target_property(lua_bindings_dir swig_wrapper_lua BINARY_DIR)
+  set(lldb_lua_wrapper ${lua_bindings_dir}/LLDBWrapLua.cpp)
 endif()
 
 # Generate SBLanguages.h from Dwarf.def.
@@ -116,6 +123,8 @@ add_lldb_library(liblldb SHARED ${option_framework}
   SBWatchpoint.cpp
   SBWatchpointOptions.cpp
   SystemInitializerFull.cpp
+  ${lldb_python_wrapper}
+  ${lldb_lua_wrapper}
 
   ADDITIONAL_HEADER_DIRS
     ${LLDB_INCLUDE_DIR}/lldb/API
@@ -142,12 +151,14 @@ add_lldb_library(liblldb SHARED ${option_framework}
   ${option_install_prefix}
 )
 
-if (LLDB_ENABLE_PYTHON)
-  add_python_wrapper(liblldb)
-endif()
+if (NOT LLDB_ENABLE_DYNAMIC_SCRIPTINTERPRETERS)
+  if (LLDB_ENABLE_PYTHON)
+    add_python_wrapper(liblldb)
+  endif()
 
-if(LLDB_ENABLE_LUA)
-  add_lua_wrapper(liblldb)
+  if(LLDB_ENABLE_LUA)
+    add_lua_wrapper(liblldb)
+  endif()
 endif()
 
 set_target_properties(liblldb

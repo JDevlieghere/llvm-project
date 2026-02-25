@@ -18,7 +18,23 @@ if (LLDB_ENABLE_LIBEDIT)
   list(APPEND LLDB_LIBEDIT_LIBS LibEdit::LibEdit)
 endif()
 
-add_lldb_library(lldbPluginScriptInterpreterPython PLUGIN
+if (LLDB_ENABLE_DYNAMIC_SCRIPTINTERPRETERS)
+  set(plugin_kind SHARED)
+  set(link_libs liblldb)
+else()
+  set(plugin_kind PLUGIN)
+  set(link_libs
+    lldbBreakpoint
+    lldbCore
+    lldbDataFormatters
+    lldbHost
+    lldbInterpreter
+    lldbTarget
+    lldbValueObject
+  )
+endif()
+
+add_lldb_library(lldbPluginScriptInterpreterPython ${plugin_kind}
   PythonDataObjects.cpp
   PythonReadline.cpp
   ScriptInterpreterPython.cpp
@@ -38,13 +54,11 @@ add_lldb_library(lldbPluginScriptInterpreterPython PLUGIN
   LINK_COMPONENTS
     Support
   LINK_LIBS
-    lldbBreakpoint
-    lldbCore
-    lldbDataFormatters
-    lldbHost
-    lldbInterpreter
-    lldbTarget
-    lldbValueObject
+    ${link_libs}
     ${Python3_LIBRARIES}
     ${LLDB_LIBEDIT_LIBS}
   )
+
+if (LLDB_ENABLE_DYNAMIC_SCRIPTINTERPRETERS)
+  add_python_wrapper(lldbPluginScriptInterpreterPython)
+endif()

@@ -12,8 +12,8 @@ if(APPLE)
 endif()
 
 if (UNIX AND "${CMAKE_SYSTEM_NAME}" MATCHES "AIX")
-  remove_definitions("-D_XOPEN_SOURCE=700")                                    
-  add_definitions("-D_ALL_SOURCE")                                             
+  remove_definitions("-D_XOPEN_SOURCE=700")
+  add_definitions("-D_ALL_SOURCE")
 endif()
 
 set(LLDB_DRIVER_LINK_LIBS
@@ -24,6 +24,16 @@ set(LLDB_DRIVER_LINK_LIBS
 
 if(WIN32)
   list(APPEND LLDB_DRIVER_LINK_LIBS lldbHostPythonPathSetup)
+endif()
+
+if (LLDB_ENABLE_DYNAMIC_SCRIPTINTERPRETERS)
+  if (LLDB_ENABLE_PYTHON)
+    list(APPEND LLDB_DRIVER_LINK_LIBS lldbPluginScriptInterpreterPython)
+  endif()
+
+  if(LLDB_ENABLE_LUA)
+    list(APPEND LLDB_DRIVER_LINK_LIBS lldbPluginScriptInterpreterLua)
+  endif()
 endif()
 
 add_lldb_tool(lldb
