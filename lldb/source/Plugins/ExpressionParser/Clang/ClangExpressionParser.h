@@ -65,11 +65,10 @@ public:
   ///     diagnostics (i.e. errors, warnings or notes from Clang).
   ///
   /// \param[in] force_disable_ptrauth_codegen
-  ///     (rare) force pointer authentication code generation to be
-  ///     disabled for this expression.  Normally the decision of
-  ///     whether to generate ptrauth codegen or not is determined
-  ///     by the ArchSpec or ABI; this is for overriding the normal
-  ///     codegen.
+  ///     Force pointer authentication code generation to be disabled for this
+  ///     expression.  Normally the decision of whether to generate ptrauth
+  ///     codegen or not is determined by the ArchSpec or ABI; this is for
+  ///     overriding the normal codegen.
   ClangExpressionParser(ExecutionContextScope *exe_scope, Expression &expr,
                         bool generate_debug_info,
                         DiagnosticManager &diagnostic_manager,

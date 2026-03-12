@@ -1649,10 +1649,7 @@ bool IRForTarget::runOnModule(Module &llvm_module) {
     }
   }
 
-  ////////////////////////////////////////////////////////////
-  // Replace $__lldb_expr_result with a persistent variable
-  //
-
+  // Replace $__lldb_expr_result with a persistent variable.
   if (main_function) {
     if (!CreateResultVariable(*main_function)) {
       LLDB_LOG(log, "CreateResultVariable() failed");
@@ -1701,10 +1698,7 @@ bool IRForTarget::runOnModule(Module &llvm_module) {
     }
   }
 
-  ///////////////////////////////////////////////////////////////////////////////
   // Fix all Objective-C constant strings to use NSStringWithCString:encoding:
-  //
-
   if (!RewriteObjCConstStrings()) {
     LLDB_LOG(log, "RewriteObjCConstStrings() failed");
 
@@ -1738,10 +1732,7 @@ bool IRForTarget::runOnModule(Module &llvm_module) {
     }
   }
 
-  ////////////////////////////////////////////////////////////////////////
-  // Run function-level passes that only make sense on the main function
-  //
-
+  // Run function-level passes that only make sense on the main function.
   if (main_function) {
     if (!ResolveExternals(*main_function)) {
       LLDB_LOG(log, "ResolveExternals() failed");
@@ -1760,13 +1751,10 @@ bool IRForTarget::runOnModule(Module &llvm_module) {
     }
   }
 
-  ////////////////////////////////////////////////////////////////////////
-  // Run function-level passes that only make sense on the main function
-  //
-  if (auto Err =
+  // Run architecture specific module-level passes.
+  if (llvm::Error error =
           lldb_private::InjectPointerSigningFixupCode(*m_module, m_policy)) {
-    LLDB_LOGF(log, "InsertPointerSigningFixups() failed:\n\"%s\"",
-              toString(std::move(Err)).c_str());
+    LLDB_LOG_ERROR(log, std::move(error), "InsertPointerSigningFixups() failed: {0}");
     return false;
   }
 

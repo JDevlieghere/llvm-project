@@ -6,10 +6,11 @@ from lldbsuite.test import lldbutil
 
 class TestPtrAuthFixups(TestBase):
     @skipUnlessDarwin
-    @skipUnlessArch("arm64")
+    @skipUnlessArch("arm64e")
     def test_static_function_pointer(self):
-        """Test that a static function pointer initialized in an expression
-        gets correctly signed on arm64e via the pointer signing fixup pass."""
+        """On arm64e, function pointers are automatically signed (PAC).
+        Test that we can call a function through a function pointer from the
+        expression evaluator, which requires "fixing up" the pointer signing."""
         self.build()
 
         lldbutil.run_to_source_breakpoint(

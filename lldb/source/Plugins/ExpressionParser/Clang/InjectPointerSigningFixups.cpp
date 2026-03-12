@@ -17,19 +17,19 @@
 using namespace llvm;
 
 namespace {
-
 struct PtrAuthFixup {
   GlobalVariable *GV;
   ConstantPtrAuth *CPA;
-  SmallVector<unsigned, 4> Indices;
+  SmallVector<unsigned> Indices;
 };
+} // namespace
 
 /// Recursively walk a constant looking for ConstantPtrAuth expressions.
-/// When found, record the global variable containing it and the index path
-/// to reach it within the initializer.
-void findPtrAuth(Constant *C, GlobalVariable &GV,
-                 SmallVector<unsigned, 4> &Indices,
-                 SmallVectorImpl<PtrAuthFixup> &Fixups) {
+/// When found, record the global variable containing the ConstantPtrAuth and
+/// the index path to reach it within the initializer.
+static void findPtrAuth(Constant *C, GlobalVariable &GV,
+                        SmallVector<unsigned> &Indices,
+                        SmallVectorImpl<PtrAuthFixup> &Fixups) {
   if (auto *CPA = dyn_cast<ConstantPtrAuth>(C)) {
     Fixups.push_back({&GV, CPA, Indices});
     return;
@@ -42,8 +42,6 @@ void findPtrAuth(Constant *C, GlobalVariable &GV,
     }
   }
 }
-
-} // namespace
 
 namespace lldb_private {
 
@@ -60,11 +58,11 @@ Error InjectPointerSigningFixupCode(llvm::Module &M,
     return Error::success();
 
   // Collect all ConstantPtrAuth expressions in global initializers.
-  SmallVector<PtrAuthFixup, 8> Fixups;
+  SmallVector<PtrAuthFixup> Fixups;
   for (auto &G : M.globals()) {
     if (!G.hasInitializer())
       continue;
-    SmallVector<unsigned, 4> Indices;
+    SmallVector<unsigned> Indices;
     findPtrAuth(G.getInitializer(), G, Indices, Fixups);
   }
 
@@ -102,7 +100,7 @@ Error InjectPointerSigningFixupCode(llvm::Module &M,
     if (Fixup.Indices.empty()) {
       Loc = GV;
     } else {
-      SmallVector<Value *, 4> GEPIndices;
+      SmallVector<Value *> GEPIndices;
       GEPIndices.push_back(ConstantInt::get(Int32Ty, 0));
       for (unsigned Idx : Fixup.Indices)
         GEPIndices.push_back(ConstantInt::get(Int32Ty, Idx));
@@ -145,7 +143,7 @@ Error InjectPointerSigningFixupCode(llvm::Module &M,
 
   const char *LLVMGlobalCtorsName = "llvm.global_ctors";
   GlobalVariable *OldCtorList = M.getNamedGlobal(LLVMGlobalCtorsName);
-  SmallVector<Constant *, 4> CtorListArgs;
+  SmallVector<Constant *> CtorListArgs;
   CtorListArgs.push_back(PtrFixupCtor);
 
   if (OldCtorList) {
