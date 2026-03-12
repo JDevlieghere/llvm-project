@@ -1754,7 +1754,8 @@ bool IRForTarget::runOnModule(Module &llvm_module) {
   // Run architecture specific module-level passes.
   if (llvm::Error error =
           lldb_private::InjectPointerSigningFixupCode(*m_module, m_policy)) {
-    LLDB_LOG_ERROR(log, std::move(error), "InsertPointerSigningFixups() failed: {0}");
+    LLDB_LOG_ERROR(log, std::move(error),
+                   "InsertPointerSigningFixups() failed: {0}");
     return false;
   }
 
