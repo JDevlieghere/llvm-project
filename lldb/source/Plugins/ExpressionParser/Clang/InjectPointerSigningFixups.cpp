@@ -5,6 +5,34 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
+//
+// On arm64e, Clang emits ConstantPtrAuth expressions in global initializers
+// to represent signed pointers. These are normally resolved by the static
+// linker, but LLDB's JIT does not run the linker, so they must be resolved
+// manually. This pass replaces each ConstantPtrAuth in a global initializer
+// with the unsigned pointer and emits a constructor function that signs the
+// pointer at runtime using the ptrauth intrinsics.
+//
+// Example: given "static int (*fp)(int, int) = &mul;", Clang emits:
+//
+//   @fp = internal global ptr ptrauth (ptr @mul, i32 0)
+//
+// This pass transforms it into:
+//
+//   @fp = internal global ptr @mul
+//   @llvm.global_ctors = appending global [1 x { i32, ptr, ptr }]
+//       [{ i32, ptr, ptr } { i32 0, ptr @ptrauth.sign, ptr null }]
+//
+//   define internal void @ptrauth.sign() {
+//     %1 = load ptr, ptr @fp, align 8
+//     %2 = ptrtoint ptr %1 to i64
+//     %3 = call i64 @llvm.ptrauth.sign(i64 %2, i32 0, i64 0)
+//     %4 = inttoptr i64 %3 to ptr
+//     store ptr %4, ptr @fp, align 8
+//     ret void
+//   }
+//
+//===----------------------------------------------------------------------===//
 
 #include "InjectPointerSigningFixups.h"
 #include "llvm/IR/Constants.h"
@@ -81,7 +109,7 @@ Error InjectPointerSigningFixupCode(llvm::Module &M,
   // Create the fixup function.
   Function *FixupFn =
       Function::Create(FunctionType::get(Type::getVoidTy(Ctx), false),
-                       GlobalValue::InternalLinkage, "arm64e", &M);
+                       GlobalValue::InternalLinkage, "ptrauth.sign", &M);
   FixupFn->insert(FixupFn->end(), BasicBlock::Create(Ctx));
   IRBuilder<> B(&FixupFn->back());
 
