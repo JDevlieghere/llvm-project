@@ -49,6 +49,9 @@ struct PtrAuthFixup {
   GlobalVariable *GV;
   ConstantPtrAuth *CPA;
   SmallVector<unsigned> Indices;
+  PtrAuthFixup(GlobalVariable *GV, ConstantPtrAuth *CPA,
+               SmallVector<unsigned> Indices)
+      : GV(GV), CPA(CPA), Indices(Indices) {}
 };
 } // namespace
 
@@ -59,7 +62,7 @@ static void findPtrAuth(Constant *C, GlobalVariable &GV,
                         SmallVector<unsigned> &Indices,
                         SmallVectorImpl<PtrAuthFixup> &Fixups) {
   if (auto *CPA = dyn_cast<ConstantPtrAuth>(C)) {
-    Fixups.push_back({&GV, CPA, Indices});
+    Fixups.emplace_back(&GV, CPA, Indices);
     return;
   }
   for (unsigned I = 0, E = C->getNumOperands(); I != E; ++I) {

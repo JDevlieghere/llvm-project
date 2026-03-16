@@ -725,6 +725,19 @@ static void SetupImportStdModuleLangOpts(CompilerInstance &compiler,
 // Implementation of ClangExpressionParser
 //===----------------------------------------------------------------------===//
 
+static void SetPointerAuthOptions(LangOptions &lang_opts) {
+  lang_opts.PointerAuthIntrinsics = true;
+  lang_opts.PointerAuthCalls = true;
+  lang_opts.PointerAuthReturns = true;
+  lang_opts.PointerAuthIndirectGotos = true;
+  lang_opts.PointerAuthAuthTraps = true;
+  lang_opts.PointerAuthVTPtrAddressDiscrimination = true;
+  lang_opts.PointerAuthFunctionTypeDiscrimination = true;
+  lang_opts.PointerAuthObjcIsa = true;
+  lang_opts.PointerAuthObjcClassROPointers = true;
+  lang_opts.PointerAuthObjcInterfaceSel = true;
+}
+
 ClangExpressionParser::ClangExpressionParser(
     ExecutionContextScope *exe_scope, Expression &expr,
     bool generate_debug_info, DiagnosticManager &diagnostic_manager,
@@ -768,16 +781,6 @@ ClangExpressionParser::ClangExpressionParser(
   // appropriate for most situations.
   SetupTargetOpts(*m_compiler, *target_sp);
 
-  const llvm::Triple triple = target_sp->GetArchitecture().GetTriple();
-  const bool enable_ptrauth =
-      triple.isArm64e() && !force_disable_ptrauth_codegen;
-
-  if (enable_ptrauth) {
-    auto &lang_opts = m_compiler->getLangOpts();
-    lang_opts.PointerAuthIntrinsics = true;
-    lang_opts.PointerAuthCalls = true;
-  }
-
   // 3. Create and install the target on the compiler.
   m_compiler->createDiagnostics();
   // Limit the number of error diagnostics we emit.
@@ -805,11 +808,12 @@ ClangExpressionParser::ClangExpressionParser(
 
   // 4. Set language options.
   SetupLangOpts(*m_compiler, *exe_scope, expr, diagnostic_manager);
-  if (enable_ptrauth) {
-    auto &lang_opts = m_compiler->getLangOpts();
-    lang_opts.PointerAuthIntrinsics = true;
-    lang_opts.PointerAuthCalls = true;
-  }
+
+  const llvm::Triple triple = target_sp->GetArchitecture().GetTriple();
+  const bool enable_ptrauth =
+      triple.isArm64e() && !force_disable_ptrauth_codegen;
+  if (enable_ptrauth)
+    SetPointerAuthOptions(m_compiler->getLangOpts());
 
   auto *clang_expr = dyn_cast<ClangUserExpression>(&m_expr);
   if (clang_expr && clang_expr->DidImportCxxModules()) {
