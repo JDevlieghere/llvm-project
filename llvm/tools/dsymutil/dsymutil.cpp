@@ -41,6 +41,7 @@
 #include "llvm/Support/LLVMDriver.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/Path.h"
+#include "llvm/Support/Program.h"
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/ThreadPool.h"
 #include "llvm/Support/WithColor.h"
@@ -116,6 +117,7 @@ struct DsymutilOptions {
   bool NoObjectTimestamp = false;
   std::string OutputFile;
   std::string Toolchain;
+  std::string CodesignIdentity;
   std::string ReproducerPath;
   std::string AllowFile;
   std::string DisallowFile;
@@ -215,6 +217,15 @@ static Error verifyOptions(const DsymutilOptions &Options) {
     return make_error<StringError>(
         "--allow and --disallow cannot be specified together",
         errc::invalid_argument);
+
+  if (!Options.CodesignIdentity.empty() && Options.Flat)
+    return make_error<StringError>(
+        "cannot use --codesign with --flat (no bundle to sign)",
+        errc::invalid_argument);
+
+  if (!Options.CodesignIdentity.empty() && Options.LinkOpts.NoOutput)
+    return make_error<StringError>("cannot use --codesign with --no-output",
+                                   errc::invalid_argument);
 
   return Error::success();
 }
@@ -382,6 +393,9 @@ static Expected<DsymutilOptions> getOptions(opt::InputArgList &Args) {
 
   if (opt::Arg *Toolchain = Args.getLastArg(OPT_toolchain))
     Options.Toolchain = Toolchain->getValue();
+
+  if (opt::Arg *Codesign = Args.getLastArg(OPT_codesign))
+    Options.CodesignIdentity = Codesign->getValue();
 
   if (Args.hasArg(OPT_assembly))
     Options.LinkOpts.FileType = DWARFLinkerBase::OutputFileType::Assembly;
@@ -629,6 +643,33 @@ getOutputFileName(StringRef InputFile, const DsymutilOptions &Options) {
   std::string ResourceDir = std::string(Path);
   sys::path::append(Path, "DWARF", sys::path::filename(DwarfFile));
   return OutputLocation(std::string(Path), ResourceDir);
+}
+
+static Error codesignBundle(StringRef BundlePath, StringRef Identity,
+                            StringRef SDKPath) {
+  auto Path = sys::findProgramByName("codesign", ArrayRef(SDKPath));
+  if (!Path)
+    Path = sys::findProgramByName("codesign");
+
+  if (!Path)
+    return make_error<StringError>(
+        "codesign not found: " + Path.getError().message(), Path.getError());
+
+  SmallVector<StringRef, 5> Args;
+  Args.push_back("codesign");
+  Args.push_back("-f");
+  Args.push_back("-s");
+  Args.push_back(Identity);
+  Args.push_back(BundlePath);
+
+  std::string ErrMsg;
+  int Result =
+      sys::ExecuteAndWait(*Path, Args, std::nullopt, {}, 0, 0, &ErrMsg);
+  if (Result)
+    return make_error<StringError>("codesign failed: " + ErrMsg,
+                                   inconvertibleErrorCode());
+
+  return Error::success();
 }
 
 int dsymutil_main(int argc, char **argv, const llvm::ToolContext &) {
@@ -958,6 +999,21 @@ int dsymutil_main(int argc, char **argv, const llvm::ToolContext &) {
               TempFiles, OutputLocationOrErr->DWARFFile, Options.LinkOpts,
               SDKPath, Fat64))
         return EXIT_FAILURE;
+    }
+
+    if (!Options.CodesignIdentity.empty()) {
+      StringRef DWARFFile = OutputLocationOrErr->DWARFFile;
+      auto Pos = DWARFFile.find(".dSYM/");
+      if (Pos == StringRef::npos)
+        Pos = DWARFFile.find(".dSYM");
+      if (Pos != StringRef::npos) {
+        std::string BundlePath = DWARFFile.substr(0, Pos + 5).str();
+        if (auto E =
+                codesignBundle(BundlePath, Options.CodesignIdentity, SDKPath)) {
+          WithColor::error() << toString(std::move(E)) << '\n';
+          return EXIT_FAILURE;
+        }
+      }
     }
   }
 
