@@ -1479,9 +1479,10 @@ bool Module::LoadScriptingResourceInTarget(Target *target, Status &error) {
       continue;
 
     if (should_load == eLoadScriptFromSymFileWarn) {
-      // clang-format off
-      debugger.ReportWarning(
-          llvm::formatv(
+      if (!platform_sp->IsSymbolFileTrusted(*this)) {
+        debugger.ReportWarning(
+            llvm::formatv(
+                // clang-format off
 R"('{0}' contains a debug script. To run this script in this debug session:
 
     command script import "{1}"
@@ -1490,12 +1491,17 @@ To run all discovered debug scripts in this session:
 
     settings set target.load-script-from-symbol-file true
 )",
-              GetFileSpec().GetFileNameStrippingExtension(),
-              scripting_fspec.GetPath()),
-          debugger.GetID());
-      // clang-format on
+                // clang-format on
+                GetFileSpec().GetFileNameStrippingExtension(),
+                scripting_fspec.GetPath()),
+            debugger.GetID());
 
-      return false;
+        return false;
+      }
+
+      LLDB_LOG(GetLog(LLDBLog::Modules),
+               "Auto-loading {0} from trusted symbol file",
+               scripting_fspec.GetPath());
     }
 
     LLDB_LOG(GetLog(LLDBLog::Modules), "Auto-loading {0}",

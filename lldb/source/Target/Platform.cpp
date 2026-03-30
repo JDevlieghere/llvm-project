@@ -157,6 +157,8 @@ Status Platform::GetFileWithUUID(const FileSpec &platform_file,
   return Status();
 }
 
+bool Platform::IsSymbolFileTrusted(Module &module) { return false; }
+
 FileSpecList Platform::LocateExecutableScriptingResourcesFromSafePaths(
     Stream &feedback_stream, FileSpec module_spec, const Target &target) {
   assert(module_spec);
