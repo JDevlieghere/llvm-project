@@ -18,6 +18,9 @@ add_lldb_library(lldbHostMacOSXObjCXX NO_PLUGIN_DEPENDENCIES
     ${EXTRA_LIBS}
   )
 
+find_library(SECURITY_FRAMEWORK Security)
+target_link_libraries(lldbHostMacOSXObjCXX PRIVATE ${SECURITY_FRAMEWORK})
+
 target_compile_options(lldbHostMacOSXObjCXX PRIVATE
   -fno-objc-exceptions
   -Wno-deprecated-declarations)

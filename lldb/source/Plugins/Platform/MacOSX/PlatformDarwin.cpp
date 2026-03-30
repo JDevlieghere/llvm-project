@@ -50,6 +50,7 @@
 #include "llvm/Support/VersionTuple.h"
 
 #if defined(__APPLE__)
+#include "lldb/Host/macosx/HostInfoMacOSX.h"
 #include <TargetConditionals.h>
 #endif
 
@@ -289,6 +290,39 @@ FileSpecList PlatformDarwin::LocateExecutableScriptingResourcesForPlatform(
         feedback_stream, module_spec, *target, symfile_spec);
 
   return {};
+}
+
+bool PlatformDarwin::IsSymbolFileTrusted(Module &module) {
+#if defined(__APPLE__)
+  SymbolFile *symfile = module.GetSymbolFile();
+  if (!symfile)
+    return false;
+
+  ObjectFile *objfile = symfile->GetObjectFile();
+  if (!objfile)
+    return false;
+
+  std::string symfile_path = objfile->GetFileSpec().GetPath();
+  llvm::StringRef path_ref(symfile_path);
+
+  // Find the .dSYM bundle root from the symfile path, which is typically
+  // .dSYM/Contents/Resources/DWARF/<name>.
+  auto pos = path_ref.find(".dSYM/");
+  if (pos == llvm::StringRef::npos)
+    return false;
+
+  std::string bundle_path = path_ref.substr(0, pos + 5).str();
+
+  if (HostInfoMacOSX::IsBundleCodeSignTrusted(bundle_path)) {
+    LLDB_LOG(GetLog(LLDBLog::Modules),
+             "dSYM bundle '{0}' has valid trusted code signature", bundle_path);
+    return true;
+  }
+
+  return false;
+#else
+  return false;
+#endif
 }
 
 Status PlatformDarwin::ResolveSymbolFile(Target &target,
