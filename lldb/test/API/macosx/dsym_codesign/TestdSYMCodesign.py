@@ -48,7 +48,7 @@ class TestdSYMCodesign(TestBase):
         exe, dsym = self.build_dsym_with_script()
         subprocess.check_call(["codesign", "-f", "-s", "-", dsym])
 
-        self.runCmd("settings set target.load-script-from-symbol-file warn")
+        self.runCmd("settings set target.load-script-from-symbol-file trusted")
         self.createTestTarget(file_path=exe)
 
         self.expect(
@@ -68,7 +68,7 @@ class TestdSYMCodesign(TestBase):
         exe, dsym = self.build_dsym_with_script()
         subprocess.check_call(["codesign", "-f", "-s", "lldb_codesign", dsym])
 
-        self.runCmd("settings set target.load-script-from-symbol-file warn")
+        self.runCmd("settings set target.load-script-from-symbol-file trusted")
         self.createTestTarget(file_path=exe)
 
         # The script sets a marker attribute on the lldb module.
