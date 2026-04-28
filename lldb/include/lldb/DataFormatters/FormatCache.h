@@ -10,11 +10,11 @@
 #ifndef LLDB_DATAFORMATTERS_FORMATCACHE_H
 #define LLDB_DATAFORMATTERS_FORMATCACHE_H
 
-#include <map>
-#include <mutex>
-
 #include "lldb/Utility/ConstString.h"
+#include "lldb/Utility/LRUCache.h"
 #include "lldb/lldb-public.h"
+
+#include <mutex>
 
 namespace lldb_private {
 class FormatCache {
@@ -45,7 +45,7 @@ private:
     void Set(lldb::TypeSummaryImplSP);
     void Set(lldb::SyntheticChildrenSP);
   };
-  std::map<ConstString, Entry> m_entries;
+  LRUCache<ConstString, Entry> m_entries{4096};
   std::recursive_mutex m_mutex;
 
   uint64_t m_cache_hits = 0;
