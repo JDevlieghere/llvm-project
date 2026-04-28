@@ -17,6 +17,7 @@ add_lldb_unittest(UtilityTests
   FlagsTest.cpp
   ListenerTest.cpp
   LogTest.cpp
+  LRUCacheTest.cpp
   NameMatchesTest.cpp
   NonNullSharedPtrTest.cpp
   PredicateTest.cpp
