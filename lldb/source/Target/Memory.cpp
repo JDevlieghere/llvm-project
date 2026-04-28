@@ -22,7 +22,7 @@ using namespace lldb_private;
 
 // MemoryCache constructor
 MemoryCache::MemoryCache(Process &process)
-    : m_mutex(), m_L1_cache(), m_L2_cache(), m_invalid_ranges(),
+    : m_mutex(), m_L1_cache(), m_L2_cache(4096), m_invalid_ranges(),
       m_process(process),
       m_L2_cache_line_byte_size(process.GetMemoryCacheLineSize()) {}
 
@@ -32,7 +32,7 @@ MemoryCache::~MemoryCache() = default;
 void MemoryCache::Clear(bool clear_invalid_ranges) {
   std::lock_guard<std::recursive_mutex> guard(m_mutex);
   m_L1_cache.clear();
-  m_L2_cache.clear();
+  m_L2_cache.Clear();
   if (clear_invalid_ranges)
     m_invalid_ranges.Clear();
   m_L2_cache_line_byte_size = m_process.GetMemoryCacheLineSize();
@@ -71,7 +71,7 @@ void MemoryCache::Flush(addr_t addr, size_t size) {
     }
   }
 
-  if (!m_L2_cache.empty()) {
+  if (!m_L2_cache.Empty()) {
     const uint32_t cache_line_byte_size = m_L2_cache_line_byte_size;
     const addr_t end_addr = (addr + size - 1);
     const addr_t first_cache_line_addr = addr - (addr % cache_line_byte_size);
@@ -91,9 +91,7 @@ void MemoryCache::Flush(addr_t addr, size_t size) {
     uint32_t cache_idx = 0;
     for (addr_t curr_addr = first_cache_line_addr; cache_idx < num_cache_lines;
          curr_addr += cache_line_byte_size, ++cache_idx) {
-      BlockMap::iterator pos = m_L2_cache.find(curr_addr);
-      if (pos != m_L2_cache.end())
-        m_L2_cache.erase(pos);
+      m_L2_cache.Erase(curr_addr);
     }
   }
 }
@@ -129,9 +127,9 @@ lldb::DataBufferSP MemoryCache::GetL2CacheLine(lldb::addr_t line_base_addr,
   assert((line_base_addr % m_L2_cache_line_byte_size) == 0);
 
   std::lock_guard<std::recursive_mutex> guard(m_mutex);
-  auto pos = m_L2_cache.find(line_base_addr);
-  if (pos != m_L2_cache.end())
-    return pos->second;
+  auto cached = m_L2_cache.Get(line_base_addr);
+  if (cached)
+    return *cached;
 
   auto data_buffer_heap_sp =
       std::make_shared<DataBufferHeap>(m_L2_cache_line_byte_size, 0);
@@ -147,7 +145,7 @@ lldb::DataBufferSP MemoryCache::GetL2CacheLine(lldb::addr_t line_base_addr,
   if (process_bytes_read < m_L2_cache_line_byte_size)
     data_buffer_heap_sp->SetByteSize(process_bytes_read);
 
-  m_L2_cache[line_base_addr] = data_buffer_heap_sp;
+  m_L2_cache.Set(line_base_addr, data_buffer_heap_sp);
   return data_buffer_heap_sp;
 }
 

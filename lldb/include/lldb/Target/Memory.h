@@ -9,6 +9,7 @@
 #ifndef LLDB_TARGET_MEMORY_H
 #define LLDB_TARGET_MEMORY_H
 
+#include "lldb/Utility/LRUCache.h"
 #include "lldb/Utility/RangeMap.h"
 #include "lldb/lldb-private.h"
 #include <map>
@@ -52,8 +53,9 @@ protected:
   BlockMap m_L1_cache; // A first level memory cache whose chunk sizes vary that
                        // will be used only if the memory read fits entirely in
                        // a chunk
-  BlockMap m_L2_cache; // A memory cache of fixed size chinks
-                       // (m_L2_cache_line_byte_size bytes in size each)
+  // A memory cache of fixed size chunks (m_L2_cache_line_byte_size bytes in
+  // size each), with LRU eviction.
+  LRUCache<lldb::addr_t, lldb::DataBufferSP> m_L2_cache;
   InvalidRanges m_invalid_ranges;
   Process &m_process;
   uint32_t m_L2_cache_line_byte_size;
