@@ -863,6 +863,11 @@ def skipIfLinux(func):
     return skipIfPlatform(["linux"])(func)
 
 
+def skipIfNoSignals(func):
+    """Decorate the item to skip tests on platforms without signal support."""
+    return skipIfPlatform(["windows", "wasip1", "wasi"])(func)
+
+
 def skipIfWindows(func=None, windows_version=None):
     """Decorate the item to skip tests that should be skipped on Windows."""
 
