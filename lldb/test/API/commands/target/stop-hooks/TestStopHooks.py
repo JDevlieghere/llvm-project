@@ -8,6 +8,7 @@ import lldbsuite.test.lldbutil as lldbutil
 from lldbsuite.test.lldbtest import *
 
 
+@skipIfWasm  # no expression evaluation
 class TestStopHooks(TestBase):
     NO_DEBUG_INFO_TESTCASE = True
 

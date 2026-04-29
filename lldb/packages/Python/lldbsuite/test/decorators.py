@@ -868,6 +868,11 @@ def skipIfNoSignals(func):
     return skipIfPlatform(["windows", "wasip1", "wasi"])(func)
 
 
+def skipIfWasm(func):
+    """Decorate the item to skip tests that should be skipped on WebAssembly."""
+    return skipIfPlatform(["wasip1", "wasi"])(func)
+
+
 def skipIfWindows(func=None, windows_version=None):
     """Decorate the item to skip tests that should be skipped on Windows."""
 

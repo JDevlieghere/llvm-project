@@ -7,6 +7,7 @@ import lldbsuite.test.lldbutil as lldbutil
 from lldbsuite.test.lldbtest import *
 
 
+@skipIfWasm  # no expression evaluation
 class ContextObjectTestCase(TestBase):
     def test_context_object(self):
         """Tests expression evaluation in context of an object."""
