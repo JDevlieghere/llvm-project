@@ -255,19 +255,17 @@ protected:
       uint32_t LocalOffset;
     };
 
-    /// Shared registry for .debug_frame CIEs that have already been emitted
-    /// by some LinkContext. The key is the raw CIE bytes. Populated
-    /// serially in ObjectContexts order so that the first LinkContext to
-    /// reference a CIE is its owner, which guarantees the CIE appears
-    /// before any referencing FDE in the concatenated output.
-    /// SectionDescriptor pointers remain valid until linking completes
-    /// because they live in std::map-held shared_ptrs.
-    ///
-    /// Not thread-safe: callers must serialize all access.
+    /// Linker-wide registry for .debug_frame CIEs. The key is the raw CIE
+    /// bytes. Populated by a serial pass over ObjectContexts (so ownership
+    /// is deterministic — first LinkContext wins) and then consumed
+    /// read-only by a parallel emission pass that writes each context's
+    /// .debug_frame section. SectionDescriptor pointers remain valid until
+    /// linking completes because they live in std::map-held shared_ptrs.
     using CIERegistry = StringMap<CIELocation>;
 
     /// Result of scanning one LinkContext's input .debug_frame. Produced
-    /// by scanFrameData() and consumed by cloneAndEmitDebugFrame. Owns a
+    /// by scanFrameData() during the parallel link phase and consumed by
+    /// the serial CIE-registry merge and parallel emission passes. Owns a
     /// copy of the raw frame bytes so the StringRef views below remain
     /// valid after the input DWARFContext is unloaded.
     struct FrameScanResult {
@@ -279,21 +277,32 @@ protected:
       /// FDE's initial_location field.
       unsigned AddressSize = 0;
 
-      /// FDEs retained for emission. CIEBytes points at the matching CIE
-      /// inside FrameData; Instructions is the FDE body after the
-      /// initial_length / CIE_pointer / initial_location fields.
+      /// Unique CIEs referenced by at least one retained FDE in this
+      /// context, in first-reference order. Each element is a view into
+      /// FrameData and is a key into the linker-wide CIERegistry.
+      SmallVector<StringRef> CIEs;
+
+      /// FDEs retained for emission. CIEBytes is the registry key;
+      /// Instructions is the FDE body after the initial_length /
+      /// CIE_pointer / initial_location fields.
       struct FDE {
         StringRef CIEBytes;
         uint64_t Address = 0;
         StringRef Instructions;
       };
       SmallVector<FDE> FDEs;
+
+      /// CIEs this context owns, set during the serial CIE-registry
+      /// merge. Emission writes these at local offsets 0,
+      /// OwnedCIEs[0].size(), ... in order.
+      SmallVector<StringRef> OwnedCIEs;
     };
 
-    /// Populated by scanFrameData() (called from scanAndUnloadInput()) when
-    /// this context has frame data to emit. Consumed by
-    /// cloneAndEmitDebugFrame, which resets this pointer once emission
-    /// ends.
+    /// Populated by scanFrameData() (called from scanAndUnloadInput())
+    /// when this context has frame data to emit. OwnedCIEs is filled
+    /// during the serial CIE-registry merge and consumed during parallel
+    /// emission, which resets this pointer once the section has been
+    /// written.
     std::unique_ptr<FrameScanResult> FrameScan;
 
     /// Link compile units for this context.
@@ -319,12 +328,19 @@ protected:
     /// CIE/FDE emission happens later against the scan result alone.
     Error scanFrameData();
 
-    /// Clone and emit this context's .debug_frame section, deduplicating
-    /// CIEs against the linker-wide registry. Must be called serially in
-    /// ObjectContexts order so the first LinkContext to reference a CIE
-    /// becomes its owner and the CIE precedes every referencing FDE in
-    /// the concatenated output.
-    Error cloneAndEmitDebugFrame(CIERegistry &CIEs);
+    /// Register this context's CIEs with the linker-wide registry. The
+    /// first LinkContext to reference a given CIE becomes its owner and
+    /// appends it to the context's FrameScan->OwnedCIEs list. Must be
+    /// called serially in ObjectContexts order for deterministic
+    /// ownership and local-offset assignment.
+    void registerCIEs(CIERegistry &CIEs);
+
+    /// Emit this context's .debug_frame section: owned CIEs first, then
+    /// all retained FDEs with CIE_pointer patches resolved through the
+    /// registry. Safe to call in parallel across contexts because each
+    /// call writes only to its own SectionDescriptor; the registry is
+    /// read-only here.
+    Error emitDebugFrame(const CIERegistry &CIEs);
 
     /// Emit FDE record.
     void emitFDE(uint32_t CIEOffset, uint32_t AddrSize, uint64_t Address,

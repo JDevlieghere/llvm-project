@@ -217,23 +217,29 @@ Error DWARFLinkerImpl::link() {
     }
   }
 
-  // Emit .debug_frame serially in ObjectContexts order so that CIEs are
-  // deduplicated across LinkContexts while still appearing before any FDE
-  // that references them in the final output. Only LinkContext instances
-  // emit into .debug_frame, so iterating ObjectContexts here matches the
-  // final section layout produced by forEachObjectSectionsSet().
+  // Build the linker-wide .debug_frame CIE registry and then emit each
+  // context's .debug_frame in parallel. Ownership is assigned serially in
+  // ObjectContexts order so the first context to reference a given CIE
+  // becomes its owner — this makes the output deterministic without
+  // requiring that a CIE precede every FDE that references it in the
+  // concatenated .debug_frame. Cross-section CIE pointers are resolved by
+  // the existing DebugOffsetPatch mechanism when final section offsets
+  // are assigned.
   if (!GlobalData.getOptions().UpdateIndexTablesOnly) {
     LinkContext::CIERegistry CIEs;
+    for (std::unique_ptr<LinkContext> &Context : ObjectContexts)
+      if (Context->FrameScan)
+        Context->registerCIEs(CIEs);
+
     llvm::parallel::TaskGroup TGroup;
-    // Use a task group here so per-thread allocators used by downstream
-    // emission code are called from the ThreadPoolExecutor threads.
-    TGroup.spawn([&]() {
-      for (std::unique_ptr<LinkContext> &Context : ObjectContexts) {
-        if (Context->FrameScan)
-          if (Error Err = Context->cloneAndEmitDebugFrame(CIEs))
-            GlobalData.error(std::move(Err), Context->InputDWARFFile.FileName);
-      }
-    });
+    for (std::unique_ptr<LinkContext> &Context : ObjectContexts) {
+      if (!Context->FrameScan)
+        continue;
+      TGroup.spawn([&]() {
+        if (Error Err = Context->emitDebugFrame(CIEs))
+          GlobalData.error(std::move(Err), Context->InputDWARFFile.FileName);
+      });
+    }
   }
 
   if (ArtificialTypeUnit != nullptr && !ArtificialTypeUnit->getTypePool()
@@ -791,9 +797,11 @@ Error DWARFLinkerImpl::LinkContext::scanFrameData() {
   uint64_t InputOffset = 0;
   const unsigned SrcAddrSize = Scan->AddressSize;
 
-  // CIEs defined in this input, keyed by their input offsets, so FDEs
-  // can resolve their CIE_pointer field to the matching CIE bytes.
+  // CIEs defined in this input, keyed by their input offsets. A CIE is
+  // only promoted into Scan->CIEs once a retained FDE references it, so
+  // CIEs unreferenced in the output are dropped.
   DenseMap<uint64_t, StringRef> LocalCIEs;
+  DenseSet<uint64_t> AddedCIEs;
 
   while (Data.isValidOffset(InputOffset)) {
     uint64_t EntryOffset = InputOffset;
@@ -853,6 +861,9 @@ Error DWARFLinkerImpl::LinkContext::scanFrameData() {
           createStringError(std::errc::invalid_argument,
                             "Truncated .debug_frame FDE."));
 
+    if (AddedCIEs.insert(CIEId).second)
+      Scan->CIEs.push_back(CIEData);
+
     unsigned FDERemainingBytes = InitialLength - (4 + SrcAddrSize);
     Scan->FDEs.push_back({CIEData, Loc + Range->Value,
                           FrameBytes.substr(InputOffset, FDERemainingBytes)});
@@ -863,40 +874,65 @@ Error DWARFLinkerImpl::LinkContext::scanFrameData() {
   return Error::success();
 }
 
-Error DWARFLinkerImpl::LinkContext::cloneAndEmitDebugFrame(CIERegistry &CIEs) {
-  assert(FrameScan && "cloneAndEmitDebugFrame called without FrameScan");
-
+void DWARFLinkerImpl::LinkContext::registerCIEs(CIERegistry &CIEs) {
+  assert(FrameScan && "registerCIEs called without FrameScan");
   SectionDescriptor &OutSection =
       getOrCreateSectionDescriptor(DebugSectionKind::DebugFrame);
+
+  uint32_t NextLocalOffset = 0;
+  for (StringRef CIEBytes : FrameScan->CIEs) {
+    auto [It, Inserted] =
+        CIEs.try_emplace(CIEBytes, CIELocation{&OutSection, NextLocalOffset});
+    if (Inserted) {
+      FrameScan->OwnedCIEs.push_back(CIEBytes);
+      NextLocalOffset += static_cast<uint32_t>(CIEBytes.size());
+    }
+  }
+}
+
+Error DWARFLinkerImpl::LinkContext::emitDebugFrame(const CIERegistry &CIEs) {
+  assert(FrameScan && "emitDebugFrame called without FrameScan");
+  SectionDescriptor &OutSection =
+      getSectionDescriptor(DebugSectionKind::DebugFrame);
+
+  // Emit owned CIEs first, at offsets matching those reserved by
+  // registerCIEs. Their local offsets are the running sum of prior CIE
+  // sizes starting at 0.
+  for (StringRef CIEBytes : FrameScan->OwnedCIEs)
+    OutSection.OS << CIEBytes;
+
   const dwarf::FormParams FP = OutSection.getFormParams();
   const unsigned SrcAddrSize = FrameScan->AddressSize;
 
   for (const FrameScanResult::FDE &FDE : FrameScan->FDEs) {
-    // Check whether an identical CIE has already been emitted (possibly
-    // by an earlier LinkContext). If not, emit it into this section and
-    // record its location in the shared registry.
-    uint64_t LocalOffset = OutSection.OS.tell();
-    if (LocalOffset > FP.getDwarfMaxOffset())
+    auto It = CIEs.find(FDE.CIEBytes);
+    assert(It != CIEs.end() && "CIE missing from registry");
+    SectionDescriptor *CIEOwnerSection = It->second.OwnerSection;
+    const uint32_t CIELocalOffset = It->second.LocalOffset;
+
+    const uint64_t FDEPos = OutSection.OS.tell();
+    // Note: this guards against a single context's section exceeding the
+    // DWARF32 limit. It does NOT catch the post-glue overflow that would
+    // happen if the concatenated .debug_frame across all contexts pushes
+    // past 4 GB; that case slips through silently because StartOffset is
+    // not yet assigned. A post-glue check would belong in the patch
+    // resolver in OutputSections.cpp.
+    if (FDEPos > FP.getDwarfMaxOffset())
       return createFileError(
           InputDWARFFile.FileName,
           createStringError(".debug_frame section offset "
                             "0x" +
-                            Twine::utohexstr(LocalOffset) + " exceeds the " +
+                            Twine::utohexstr(FDEPos) + " exceeds the " +
                             dwarf::FormatString(FP.Format) + " limit"));
-    auto [It, Inserted] = CIEs.try_emplace(
-        FDE.CIEBytes,
-        CIELocation{&OutSection, static_cast<uint32_t>(LocalOffset)});
-    if (Inserted)
-      OutSection.OS << FDE.CIEBytes;
-    SectionDescriptor *CIEOwnerSection = It->second.OwnerSection;
-    const uint32_t OffsetToCIERecord = It->second.LocalOffset;
 
-    // The FDE's CIE pointer will be patched at output time to
-    // CIEOwnerSection->StartOffset + OffsetToCIERecord.
-    OutSection.notePatch(
-        DebugOffsetPatch{OutSection.OS.tell() + 4, CIEOwnerSection, true});
+    // The CIE_pointer field follows the 4-byte initial_length. At
+    // patch-resolution time it is rebound to
+    // CIEOwnerSection->StartOffset + CIELocalOffset.
+    OutSection.notePatch(DebugOffsetPatch{FDEPos + 4, CIEOwnerSection, true});
 
-    emitFDE(OffsetToCIERecord, SrcAddrSize, FDE.Address, FDE.Instructions,
+    // Emit the FDE with the CIE pointer initially set to the owner's
+    // local offset; the patch above completes the binding at output time.
+    emitFDE(CIELocalOffset, SrcAddrSize, FDE.Address, FDE.Instructions,
             OutSection);
   }
 
