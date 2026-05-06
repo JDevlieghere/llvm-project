@@ -245,6 +245,27 @@ protected:
       return Size;
     }
 
+    /// Section + local offset of a .debug_frame CIE that has been (or will
+    /// be) emitted by some LinkContext. Stored in CIERegistry so that any
+    /// FDE referencing the same CIE bytes can resolve its CIE_pointer to
+    /// OwnerSection->StartOffset + LocalOffset at output time, even when
+    /// the FDE lives in a different LinkContext's section.
+    struct CIELocation {
+      SectionDescriptor *OwnerSection;
+      uint32_t LocalOffset;
+    };
+
+    /// Shared registry for .debug_frame CIEs that have already been emitted
+    /// by some LinkContext. The key is the raw CIE bytes. Populated
+    /// serially in ObjectContexts order so that the first LinkContext to
+    /// reference a CIE is its owner, which guarantees the CIE appears
+    /// before any referencing FDE in the concatenated output.
+    /// SectionDescriptor pointers remain valid until linking completes
+    /// because they live in std::map-held shared_ptrs.
+    ///
+    /// Not thread-safe: callers must serialize all access.
+    using CIERegistry = StringMap<CIELocation>;
+
     /// Result of scanning one LinkContext's input .debug_frame. Produced
     /// by scanFrameData() and consumed by cloneAndEmitDebugFrame. Owns a
     /// copy of the raw frame bytes so the StringRef views below remain
@@ -269,9 +290,10 @@ protected:
       SmallVector<FDE> FDEs;
     };
 
-    /// Populated by scanFrameData() when this context has frame data to
-    /// emit. Consumed by cloneAndEmitDebugFrame, which resets this
-    /// pointer once emission ends.
+    /// Populated by scanFrameData() (called from scanAndUnloadInput()) when
+    /// this context has frame data to emit. Consumed by
+    /// cloneAndEmitDebugFrame, which resets this pointer once emission
+    /// ends.
     std::unique_ptr<FrameScanResult> FrameScan;
 
     /// Link compile units for this context.
@@ -285,11 +307,24 @@ protected:
     /// Emit invariant sections.
     Error emitInvariantSections();
 
-    /// Parse this context's input .debug_frame into FrameScan.
+    /// Scan the input .debug_frame into FrameScan (if the context has
+    /// frame data to emit), then drop the input DWARFContext so peak
+    /// memory across the parallel link stays bounded to the active thread
+    /// count rather than the full object list. The returned Error
+    /// originates from frame scanning; the unload step itself cannot fail
+    /// and runs unconditionally.
+    Error scanAndUnloadInput();
+
+    /// Parse this context's input .debug_frame into FrameScan. Deferred
+    /// CIE/FDE emission happens later against the scan result alone.
     Error scanFrameData();
 
-    /// Clone and emit .debug_frame.
-    Error cloneAndEmitDebugFrame();
+    /// Clone and emit this context's .debug_frame section, deduplicating
+    /// CIEs against the linker-wide registry. Must be called serially in
+    /// ObjectContexts order so the first LinkContext to reference a CIE
+    /// becomes its owner and the CIE precedes every referencing FDE in
+    /// the concatenated output.
+    Error cloneAndEmitDebugFrame(CIERegistry &CIEs);
 
     /// Emit FDE record.
     void emitFDE(uint32_t CIEOffset, uint32_t AddrSize, uint64_t Address,

@@ -186,8 +186,8 @@ Error DWARFLinkerImpl::link() {
       // Link object file.
       if (Error Err = Context->link(ArtificialTypeUnit.get()))
         GlobalData.error(std::move(Err), Context->InputDWARFFile.FileName);
-
-      Context->InputDWARFFile.unload();
+      if (Error Err = Context->scanAndUnloadInput())
+        GlobalData.error(std::move(Err), Context->InputDWARFFile.FileName);
     }
   } else {
     DefaultThreadPool Pool(llvm::parallel::strategy);
@@ -196,8 +196,8 @@ Error DWARFLinkerImpl::link() {
         // Link object file.
         if (Error Err = Context->link(ArtificialTypeUnit.get()))
           GlobalData.error(std::move(Err), Context->InputDWARFFile.FileName);
-
-        Context->InputDWARFFile.unload();
+        if (Error Err = Context->scanAndUnloadInput())
+          GlobalData.error(std::move(Err), Context->InputDWARFFile.FileName);
       });
 
     Pool.wait();
@@ -215,6 +215,25 @@ Error DWARFLinkerImpl::link() {
       for (std::unique_ptr<CompileUnit> &CU : Context->CompileUnits)
         CU->mergeSwiftInterfaces(*SwiftInterfaces);
     }
+  }
+
+  // Emit .debug_frame serially in ObjectContexts order so that CIEs are
+  // deduplicated across LinkContexts while still appearing before any FDE
+  // that references them in the final output. Only LinkContext instances
+  // emit into .debug_frame, so iterating ObjectContexts here matches the
+  // final section layout produced by forEachObjectSectionsSet().
+  if (!GlobalData.getOptions().UpdateIndexTablesOnly) {
+    LinkContext::CIERegistry CIEs;
+    llvm::parallel::TaskGroup TGroup;
+    // Use a task group here so per-thread allocators used by downstream
+    // emission code are called from the ThreadPoolExecutor threads.
+    TGroup.spawn([&]() {
+      for (std::unique_ptr<LinkContext> &Context : ObjectContexts) {
+        if (Context->FrameScan)
+          if (Error Err = Context->cloneAndEmitDebugFrame(CIEs))
+            GlobalData.error(std::move(Err), Context->InputDWARFFile.FileName);
+      }
+    });
   }
 
   if (ArtificialTypeUnit != nullptr && !ArtificialTypeUnit->getTypePool()
@@ -595,18 +614,6 @@ Error DWARFLinkerImpl::LinkContext::link(TypeUnit *ArtificialTypeUnit) {
 
     if (Error Err = emitInvariantSections())
       return Err;
-  } else if (!CompileUnits.empty()) {
-    // Emit .debug_frame section.
-
-    Error ResultErr = Error::success();
-    llvm::parallel::TaskGroup TGroup;
-    // We use task group here as PerThreadBumpPtrAllocator should be called from
-    // the threads created by ThreadPoolExecutor.
-    TGroup.spawn([&]() {
-      if (Error Err = cloneAndEmitDebugFrame())
-        ResultErr = std::move(Err);
-    });
-    return ResultErr;
   }
 
   return Error::success();
@@ -753,10 +760,14 @@ Error DWARFLinkerImpl::LinkContext::emitInvariantSections() {
 }
 
 Error DWARFLinkerImpl::LinkContext::scanFrameData() {
+  if (GlobalData.getOptions().UpdateIndexTablesOnly)
+    return Error::success();
   if (!GlobalData.getTargetTriple().has_value())
     return Error::success();
 
   if (InputDWARFFile.Dwarf == nullptr)
+    return Error::success();
+  if (CompileUnits.empty())
     return Error::success();
 
   const DWARFObject &InputDWARFObj = InputDWARFFile.Dwarf->getDWARFObj();
@@ -852,48 +863,54 @@ Error DWARFLinkerImpl::LinkContext::scanFrameData() {
   return Error::success();
 }
 
-Error DWARFLinkerImpl::LinkContext::cloneAndEmitDebugFrame() {
-  if (Error Err = scanFrameData())
-    return Err;
-  if (!FrameScan)
-    return Error::success();
+Error DWARFLinkerImpl::LinkContext::cloneAndEmitDebugFrame(CIERegistry &CIEs) {
+  assert(FrameScan && "cloneAndEmitDebugFrame called without FrameScan");
 
   SectionDescriptor &OutSection =
       getOrCreateSectionDescriptor(DebugSectionKind::DebugFrame);
+  const dwarf::FormParams FP = OutSection.getFormParams();
   const unsigned SrcAddrSize = FrameScan->AddressSize;
 
-  /// The CIEs that have been emitted in the output section. The actual CIE
-  /// data serves a the key to this StringMap.
-  StringMap<uint32_t> EmittedCIEs;
-
   for (const FrameScanResult::FDE &FDE : FrameScan->FDEs) {
-    uint64_t OffsetToCIERecord = OutSection.OS.tell();
-
-    // Look if we already emitted a CIE that corresponds to the
-    // referenced one (the CIE data is the key of that lookup).
-    auto IteratorInserted =
-        EmittedCIEs.insert(std::make_pair(FDE.CIEBytes, OffsetToCIERecord));
-    OffsetToCIERecord = IteratorInserted.first->getValue();
-
-    // Emit CIE for this ID if it is not emitted yet.
-    if (IteratorInserted.second)
+    // Check whether an identical CIE has already been emitted (possibly
+    // by an earlier LinkContext). If not, emit it into this section and
+    // record its location in the shared registry.
+    uint64_t LocalOffset = OutSection.OS.tell();
+    if (LocalOffset > FP.getDwarfMaxOffset())
+      return createFileError(
+          InputDWARFFile.FileName,
+          createStringError(".debug_frame section offset "
+                            "0x" +
+                            Twine::utohexstr(LocalOffset) + " exceeds the " +
+                            dwarf::FormatString(FP.Format) + " limit"));
+    auto [It, Inserted] = CIEs.try_emplace(
+        FDE.CIEBytes,
+        CIELocation{&OutSection, static_cast<uint32_t>(LocalOffset)});
+    if (Inserted)
       OutSection.OS << FDE.CIEBytes;
+    SectionDescriptor *CIEOwnerSection = It->second.OwnerSection;
+    const uint32_t OffsetToCIERecord = It->second.LocalOffset;
 
-    // Remember offset to the FDE record, so that we might update
-    // field referencing CIE record(containing OffsetToCIERecord),
-    // when final offsets are known. OffsetToCIERecord(which is written later)
-    // is local to the current .debug_frame section, it should be updated
-    // with final offset of the .debug_frame section.
+    // The FDE's CIE pointer will be patched at output time to
+    // CIEOwnerSection->StartOffset + OffsetToCIERecord.
     OutSection.notePatch(
-        DebugOffsetPatch{OutSection.OS.tell() + 4, &OutSection, true});
+        DebugOffsetPatch{OutSection.OS.tell() + 4, CIEOwnerSection, true});
 
-    // Emit the FDE with updated address and CIE pointer.
     emitFDE(OffsetToCIERecord, SrcAddrSize, FDE.Address, FDE.Instructions,
             OutSection);
   }
 
   FrameScan.reset();
   return Error::success();
+}
+
+Error DWARFLinkerImpl::LinkContext::scanAndUnloadInput() {
+  // Scan the input's .debug_frame now, while the DWARFContext is still
+  // loaded, so the later (post-pool) emission pass can run against the
+  // scan result alone.
+  Error ScanErr = scanFrameData();
+  InputDWARFFile.unload();
+  return ScanErr;
 }
 
 /// Emit a FDE into the debug_frame section. \p FDEBytes
