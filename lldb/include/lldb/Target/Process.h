@@ -101,7 +101,6 @@ public:
   void SetStopOnSharedLibraryEvents(bool stop);
   bool GetDisableLangRuntimeUnwindPlans() const;
   void SetDisableLangRuntimeUnwindPlans(bool disable);
-  void DisableLanguageRuntimeUnwindPlansCallback();
   bool GetDetachKeepsStopped() const;
   void SetDetachKeepsStopped(bool keep_stopped);
   bool GetWarningsOptimization() const;

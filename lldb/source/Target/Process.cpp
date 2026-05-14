@@ -174,15 +174,41 @@ ProcessProperties::ProcessProperties(lldb_private::Process *process)
     m_collection_sp->AppendProperty(
         "thread", "Settings specific to threads.", true,
         Thread::GetGlobalProperties().GetValueProperties());
+    // DisableLangRuntimeUnwindPlans is a global property, so its underlying
+    // OptionValue is shared across every ProcessProperties. Install the
+    // setting-change callback once, here on the global, rather than per-Process
+    // (which would both race on and clobber the shared callback slot). When
+    // the user flips the setting, walk all live processes and flush their
+    // stack frames and thread plans.
+    m_collection_sp->SetValueChangedCallback(
+        ePropertyDisableLangRuntimeUnwindPlans, [] {
+          const size_t num_debuggers = Debugger::GetNumDebuggers();
+          for (size_t i = 0; i < num_debuggers; ++i) {
+            DebuggerSP debugger_sp = Debugger::GetDebuggerAtIndex(i);
+            if (!debugger_sp)
+              continue;
+            TargetList &target_list = debugger_sp->GetTargetList();
+            const size_t num_targets = target_list.GetNumTargets();
+            for (size_t t = 0; t < num_targets; ++t) {
+              TargetSP target_sp = target_list.GetTargetAtIndex(t);
+              if (!target_sp)
+                continue;
+              ProcessSP process_sp = target_sp->GetProcessSP();
+              if (!process_sp)
+                continue;
+              for (ThreadSP thread_sp : process_sp->Threads()) {
+                thread_sp->ClearStackFrames();
+                thread_sp->DiscardThreadPlans(/*force=*/true);
+              }
+            }
+          }
+        });
   } else {
     m_collection_sp =
         OptionValueProperties::CreateLocalCopy(Process::GetGlobalProperties());
     m_collection_sp->SetValueChangedCallback(
         ePropertyPythonOSPluginPath,
         [this] { m_process->LoadOperatingSystemPlugin(true); });
-    m_collection_sp->SetValueChangedCallback(
-        ePropertyDisableLangRuntimeUnwindPlans,
-        [this] { DisableLanguageRuntimeUnwindPlansCallback(); });
   }
 
   m_experimental_properties_up =
@@ -295,15 +321,6 @@ void ProcessProperties::SetDisableLangRuntimeUnwindPlans(bool disable) {
   const uint32_t idx = ePropertyDisableLangRuntimeUnwindPlans;
   SetPropertyAtIndex(idx, disable);
   m_process->Flush();
-}
-
-void ProcessProperties::DisableLanguageRuntimeUnwindPlansCallback() {
-  if (!m_process)
-    return;
-  for (auto thread_sp : m_process->Threads()) {
-    thread_sp->ClearStackFrames();
-    thread_sp->DiscardThreadPlans(/*force*/ true);
-  }
 }
 
 bool ProcessProperties::GetDetachKeepsStopped() const {
