@@ -490,6 +490,10 @@ void CompileUnit::ResolveSymbolContext(
 }
 
 bool CompileUnit::GetIsOptimized() {
+  // Guard the lazy compute under the module mutex: ParseIsOptimized takes
+  // the same mutex internally, and without it here concurrent callers can
+  // race on writes to m_is_optimized.
+  std::lock_guard<std::recursive_mutex> guard(GetModule()->GetMutex());
   if (m_is_optimized == eLazyBoolCalculate) {
     m_is_optimized = eLazyBoolNo;
     if (SymbolFile *symfile = GetModule()->GetSymbolFile()) {
