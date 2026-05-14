@@ -9,6 +9,7 @@
 #ifndef LLDB_SYMBOL_UNWINDTABLE_H
 #define LLDB_SYMBOL_UNWINDTABLE_H
 
+#include <atomic>
 #include <map>
 #include <mutex>
 #include <optional>
@@ -75,7 +76,7 @@ private:
   Module &m_module;
   collection m_unwinds;
 
-  bool m_scanned_all_unwind_sources; // true when we have looked at the
+  std::atomic<bool> m_scanned_all_unwind_sources; // true when we have looked at the
                                      // ObjectFile and SymbolFile for all
                                      // sources of unwind information; false if
                                      // we haven't done that yet, or one of the
