@@ -33,10 +33,6 @@
 #include "llvm/Support/WithColor.h"
 #include "llvm/Support/raw_ostream.h"
 
-#ifdef _WIN32
-#include "lldb/Host/windows/PythonPathSetup/PythonPathSetup.h"
-#endif
-
 #include <algorithm>
 #include <atomic>
 #include <bitset>
@@ -733,13 +729,6 @@ int main(int argc, char const *argv[]) {
   llvm::setBugReportMsg("PLEASE submit a bug report to " LLDB_BUG_REPORT_URL
                         " and include the crash report from "
                         "~/Library/Logs/DiagnosticReports/.\n");
-#endif
-
-#ifdef _WIN32
-  auto python_path_or_err = SetupPythonRuntimeLibrary();
-  if (!python_path_or_err)
-    llvm::WithColor::error()
-        << llvm::toString(python_path_or_err.takeError()) << '\n';
 #endif
 
   // Parse arguments.

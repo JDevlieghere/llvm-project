@@ -76,7 +76,7 @@
 #include <io.h>
 typedef int socklen_t;
 #include "lldb/Host/windows/ProcessLauncherWindows.h"
-#include "lldb/Host/windows/PythonPathSetup/PythonPathSetup.h"
+#include "lldb/Host/PythonRuntimeLoader.h"
 #include "llvm/Support/ConvertUTF.h"
 #include "llvm/Support/Program.h"
 #else
@@ -771,13 +771,12 @@ int main(int argc, char *argv[]) {
     llvm::errs() << "lldb-dap was not built with Python support" << '\n';
     return EXIT_SUCCESS;
 #endif
-    auto python_path_or_err = SetupPythonRuntimeLibrary();
-    if (!python_path_or_err) {
-      llvm::WithColor::error()
-          << llvm::toString(python_path_or_err.takeError()) << '\n';
+    if (llvm::Error err = lldb_private::PythonRuntimeLoader::Load()) {
+      llvm::WithColor::error() << llvm::toString(std::move(err)) << '\n';
       return EXIT_FAILURE;
     }
-    std::string python_path = *python_path_or_err;
+    llvm::StringRef python_path =
+        lldb_private::PythonRuntimeLoader::GetLoadedPath();
     if (python_path.empty()) {
       llvm::WithColor::error()
           << "unable to look for the Python shared library" << '\n';
@@ -786,11 +785,6 @@ int main(int argc, char *argv[]) {
     llvm::outs() << python_path << '\n';
     return EXIT_SUCCESS;
   }
-
-  auto python_path_or_err = SetupPythonRuntimeLibrary();
-  if (!python_path_or_err)
-    llvm::WithColor::error()
-        << llvm::toString(python_path_or_err.takeError()) << '\n';
 #endif
 
   if (input_args.hasArg(OPT_client)) {

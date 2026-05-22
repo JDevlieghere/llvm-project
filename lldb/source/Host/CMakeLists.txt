@@ -72,7 +72,6 @@ add_host_subdirectory(posix
   )
 
 if (CMAKE_SYSTEM_NAME MATCHES "Windows")
-  add_subdirectory(windows/PythonPathSetup)
   add_host_subdirectory(windows
     windows/ConnectionConPTYWindows.cpp
     windows/ConnectionGenericFileWindows.cpp
