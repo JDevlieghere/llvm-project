@@ -9,6 +9,7 @@
 #include "lldb/Core/PluginManager.h"
 
 #include "lldb/Core/Debugger.h"
+#include "lldb/Host/Config.h"
 #include "lldb/Host/FileSystem.h"
 #include "lldb/Host/HostInfo.h"
 #include "lldb/Interpreter/OptionValueProperties.h"
@@ -22,6 +23,7 @@
 #include "llvm/Support/DynamicLibrary.h"
 #include "llvm/Support/ErrorExtras.h"
 #include "llvm/Support/FileSystem.h"
+#include "llvm/Support/WithColor.h"
 #include "llvm/Support/raw_ostream.h"
 #include <cassert>
 #include <memory>
@@ -30,6 +32,10 @@
 #include <utility>
 #if defined(_WIN32)
 #include "lldb/Host/windows/PosixApi.h"
+#endif
+
+#if LLDB_ENABLE_PYTHON
+#include "lldb/Host/PythonRuntimeLoader.h"
 #endif
 
 using namespace lldb;
@@ -128,18 +134,36 @@ struct PluginDir {
 llvm::Expected<PluginInfo> PluginInfo::Create(const FileSpec &path) {
   PluginInfo plugin_info;
   std::string error;
-  plugin_info.library = llvm::sys::DynamicLibrary::getPermanentLibrary(
-      path.GetPath().c_str(), &error);
-  if (!plugin_info.library.isValid())
-    return llvm::createStringError(error);
 
   // Look for files that follow the convention <g_plugin_prefix><name>.<ext>, in
   // which case we need to call lldb_initialize_<name> and
   // lldb_terminate_<name>.
   llvm::StringRef file_name =
       path.GetFileNameStrippingExtension().GetStringRef();
-  if (file_name.starts_with(g_plugin_prefix)) {
-    llvm::StringRef plugin_name = file_name.substr(g_plugin_prefix.size());
+  llvm::StringRef plugin_name;
+  if (file_name.starts_with(g_plugin_prefix))
+    plugin_name = file_name.substr(g_plugin_prefix.size());
+
+#if LLDB_ENABLE_PYTHON
+  // Some script interpreter plugins reference their language runtime as
+  // undefined symbols (e.g. libpython). Load the runtime first so the plugin's
+  // symbols resolve when its dylib is loaded.
+  if (plugin_name == "ScriptInterpreterPython") {
+    if (llvm::Error err = PythonRuntimeLoader::Load()) {
+      llvm::WithColor::error()
+          << "cannot load Python runtime: " << llvm::toString(std::move(err))
+          << '\n';
+      return llvm::createStringError("Python runtime is not available");
+    }
+  }
+#endif
+
+  plugin_info.library = llvm::sys::DynamicLibrary::getPermanentLibrary(
+      path.GetPath().c_str(), &error);
+  if (!plugin_info.library.isValid())
+    return llvm::createStringError(error);
+
+  if (!plugin_name.empty()) {
     std::string init_symbol =
         llvm::Twine("lldb_initialize_" + plugin_name).str();
 
