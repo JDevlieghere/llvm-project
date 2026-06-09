@@ -75,7 +75,6 @@ struct TrieEntryWithOffset {
 /// \return false if the trie is detectably corrupt, true otherwise.
 bool ParseTrieEntries(DataExtractor &data, lldb::offset_t offset,
                       const bool is_arm, lldb::addr_t text_seg_base_addr,
-                      std::string &prefix,
                       std::set<lldb::addr_t> &resolver_addresses,
                       std::vector<TrieEntryWithOffset> &reexports,
                       std::vector<TrieEntryWithOffset> &ext_symbols);
