@@ -8,6 +8,7 @@
 
 #include "Plugins/Platform/MacOSX/PlatformMacOSX.h"
 #include "Plugins/Platform/MacOSX/PlatformRemoteMacOSX.h"
+#include "Plugins/Protocol/MCP/DebuggerManager.h"
 #include "Plugins/Protocol/MCP/ProtocolServerMCP.h"
 #include "Plugins/Protocol/MCP/Resource.h"
 #include "Plugins/Protocol/MCP/Tool.h"
@@ -355,6 +356,163 @@ TEST_F(MCPPluginTest, DebuggerListTool) {
 }
 
 //===----------------------------------------------------------------------===//
+// DebuggerCreateTool / DebuggerDeleteTool / DebuggerManager
+//===----------------------------------------------------------------------===//
+
+TEST_F(MCPPluginTest, DebuggerCreateTool) {
+  auto manager = std::make_shared<DebuggerManager>();
+  DebuggerCreateTool tool("debugger_create", "Create a debugger.", manager);
+
+  const size_t num_before = Debugger::GetNumDebuggers();
+  ToolArguments args; // std::monostate: the tool takes no arguments.
+  Expected<CallToolResult> result = tool.Call(args);
+  ASSERT_THAT_EXPECTED(result, Succeeded());
+  EXPECT_FALSE(result->isError);
+  ASSERT_EQ(result->content.size(), 1u);
+  EXPECT_THAT(result->content[0].text,
+              testing::StartsWith("lldb-mcp://debugger/"));
+  EXPECT_EQ(Debugger::GetNumDebuggers(), num_before + 1);
+}
+
+TEST_F(MCPPluginTest, DebuggerCreateToolResultUsableByCommandTool) {
+  auto manager = std::make_shared<DebuggerManager>();
+  DebuggerCreateTool create_tool("debugger_create", "Create a debugger.",
+                                 manager);
+  ToolArguments create_args;
+  Expected<CallToolResult> create_result = create_tool.Call(create_args);
+  ASSERT_THAT_EXPECTED(create_result, Succeeded());
+  ASSERT_EQ(create_result->content.size(), 1u);
+  const std::string uri = create_result->content[0].text;
+
+  // The URI returned by debugger_create can be handed straight to the command
+  // tool's "debugger" argument.
+  CommandTool command_tool("command", "Run an lldb command.");
+  ToolArguments command_args =
+      json::Value(json::Object{{"debugger", uri}, {"command", "version"}});
+  Expected<CallToolResult> command_result = command_tool.Call(command_args);
+  ASSERT_THAT_EXPECTED(command_result, Succeeded());
+  EXPECT_FALSE(command_result->isError);
+}
+
+TEST_F(MCPPluginTest, DebuggerDeleteTool) {
+  auto manager = std::make_shared<DebuggerManager>();
+  DebuggerCreateTool create_tool("debugger_create", "Create a debugger.",
+                                 manager);
+  DebuggerDeleteTool delete_tool("debugger_delete", "Delete a debugger.",
+                                 manager);
+
+  const size_t num_before = Debugger::GetNumDebuggers();
+
+  ToolArguments create_args;
+  Expected<CallToolResult> create_result = create_tool.Call(create_args);
+  ASSERT_THAT_EXPECTED(create_result, Succeeded());
+  ASSERT_EQ(create_result->content.size(), 1u);
+  const std::string uri = create_result->content[0].text;
+  EXPECT_EQ(Debugger::GetNumDebuggers(), num_before + 1);
+
+  ToolArguments delete_args = json::Value(json::Object{{"debugger", uri}});
+  Expected<CallToolResult> delete_result = delete_tool.Call(delete_args);
+  ASSERT_THAT_EXPECTED(delete_result, Succeeded());
+  EXPECT_FALSE(delete_result->isError);
+  EXPECT_EQ(Debugger::GetNumDebuggers(), num_before);
+
+  // Deleting the same debugger again is reported as a tool error, not a crash.
+  Expected<CallToolResult> second_delete = delete_tool.Call(delete_args);
+  ASSERT_THAT_EXPECTED(second_delete, Succeeded());
+  EXPECT_TRUE(second_delete->isError);
+}
+
+TEST_F(MCPPluginTest, DebuggerDeleteToolRefusesUnmanagedDebugger) {
+  auto manager = std::make_shared<DebuggerManager>();
+  DebuggerDeleteTool delete_tool("debugger_delete", "Delete a debugger.",
+                                 manager);
+
+  // The fixture's debugger was not created through MCP, so an MCP client must
+  // not be able to delete it.
+  ToolArguments args = json::Value(
+      json::Object{{"debugger", std::to_string(m_debugger_sp->GetID())}});
+  Expected<CallToolResult> result = delete_tool.Call(args);
+  ASSERT_THAT_EXPECTED(result, Succeeded());
+  EXPECT_TRUE(result->isError);
+  ASSERT_EQ(result->content.size(), 1u);
+  EXPECT_THAT(result->content[0].text,
+              testing::HasSubstr("not created by MCP"));
+  EXPECT_TRUE(
+      static_cast<bool>(Debugger::FindDebuggerWithID(m_debugger_sp->GetID())));
+}
+
+TEST_F(MCPPluginTest, DebuggerDeleteToolRequiresArguments) {
+  auto manager = std::make_shared<DebuggerManager>();
+  DebuggerDeleteTool delete_tool("debugger_delete", "Delete a debugger.",
+                                 manager);
+  ToolArguments args; // std::monostate
+  EXPECT_THAT_EXPECTED(
+      delete_tool.Call(args),
+      FailedWithMessage("DebuggerDeleteTool requires arguments"));
+}
+
+TEST_F(MCPPluginTest, DebuggerDeleteToolMalformedDebugger) {
+  auto manager = std::make_shared<DebuggerManager>();
+  DebuggerDeleteTool delete_tool("debugger_delete", "Delete a debugger.",
+                                 manager);
+  ToolArguments args = json::Value(json::Object{{"debugger", "notanumber"}});
+  EXPECT_THAT_EXPECTED(
+      delete_tool.Call(args),
+      FailedWithMessage("malformed debugger specifier notanumber"));
+}
+
+TEST_F(MCPPluginTest, DebuggerDeleteToolRejectsTrailingJunk) {
+  auto manager = std::make_shared<DebuggerManager>();
+  DebuggerDeleteTool delete_tool("debugger_delete", "Delete a debugger.",
+                                 manager);
+  // A target uri must not be silently truncated to the debugger id and delete
+  // the whole debugger.
+  ToolArguments args =
+      json::Value(json::Object{{"debugger", "lldb-mcp://debugger/1/target/0"}});
+  EXPECT_THAT_EXPECTED(delete_tool.Call(args),
+                       FailedWithMessage("malformed debugger specifier "
+                                         "lldb-mcp://debugger/1/target/0"));
+}
+
+TEST_F(MCPPluginTest, DebuggerDeleteToolSchema) {
+  auto manager = std::make_shared<DebuggerManager>();
+  DebuggerDeleteTool tool("debugger_delete", "Delete a debugger.", manager);
+  std::optional<json::Value> schema = tool.GetSchema();
+  ASSERT_TRUE(schema.has_value());
+  const json::Object *obj = schema->getAsObject();
+  ASSERT_NE(obj, nullptr);
+  EXPECT_EQ(obj->getString("type"), "object");
+  EXPECT_NE(obj->getObject("properties"), nullptr);
+}
+
+TEST_F(MCPPluginTest, DebuggerManagerCreateAndDestroyAll) {
+  const size_t num_before = Debugger::GetNumDebuggers();
+  DebuggerManager manager;
+
+  Expected<DebuggerSP> first = manager.CreateDebugger();
+  ASSERT_THAT_EXPECTED(first, Succeeded());
+  Expected<DebuggerSP> second = manager.CreateDebugger();
+  ASSERT_THAT_EXPECTED(second, Succeeded());
+  EXPECT_EQ(Debugger::GetNumDebuggers(), num_before + 2);
+
+  manager.DestroyAll();
+  EXPECT_EQ(Debugger::GetNumDebuggers(), num_before);
+}
+
+TEST_F(MCPPluginTest, DebuggerManagerReclaimsOnDestruction) {
+  const size_t num_before = Debugger::GetNumDebuggers();
+  {
+    DebuggerManager manager;
+    ASSERT_THAT_EXPECTED(manager.CreateDebugger(), Succeeded());
+    ASSERT_THAT_EXPECTED(manager.CreateDebugger(), Succeeded());
+    EXPECT_EQ(Debugger::GetNumDebuggers(), num_before + 2);
+    // Intentionally do not call DestroyAll. Destroying the manager (the same
+    // teardown ProtocolServerMCP::Stop relies on) must reclaim the debuggers.
+  }
+  EXPECT_EQ(Debugger::GetNumDebuggers(), num_before);
+}
+
+//===----------------------------------------------------------------------===//
 // ProtocolServerMCP
 //===----------------------------------------------------------------------===//
 
@@ -369,8 +527,8 @@ public:
 TEST_F(MCPPluginTest, ProtocolServerExtend) {
   ExtendableProtocolServerMCP server;
   lldb_protocol::mcp::Server mcp_server("lldb-mcp", "0.1.0");
-  // Extend registers the "command" and "debugger_list" tools and the debugger
-  // resource provider on the server.
+  // Extend registers the "command", "debugger_list", "debugger_create" and
+  // "debugger_delete" tools and the debugger resource provider on the server.
   server.Extend(mcp_server);
 }
 

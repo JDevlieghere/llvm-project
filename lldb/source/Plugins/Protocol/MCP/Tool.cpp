@@ -7,6 +7,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "Tool.h"
+#include "DebuggerManager.h"
 #include "lldb/Core/Debugger.h"
 #include "lldb/Interpreter/CommandInterpreter.h"
 #include "lldb/Interpreter/CommandReturnObject.h"
@@ -39,6 +40,33 @@ bool fromJSON(const json::Value &V, CommandToolArguments &A, json::Path P) {
          O.mapOptional("command", A.command);
 }
 
+struct DebuggerDeleteToolArguments {
+  /// Either an id like '1' or a uri like 'lldb-mcp://debugger/1'.
+  std::string debugger;
+};
+
+bool fromJSON(const json::Value &V, DebuggerDeleteToolArguments &A,
+              json::Path P) {
+  json::ObjectMapper O(V, P);
+  return O && O.mapOptional("debugger", A.debugger);
+}
+
+/// Parse a debugger specifier that is either an id like '1' or a uri like
+/// 'lldb-mcp://debugger/1' into a debugger id.
+static llvm::Expected<lldb::user_id_t>
+parseDebuggerID(llvm::StringRef specifier) {
+  llvm::StringRef original = specifier;
+  specifier.consume_front(kSchemeAndHost);
+  lldb::user_id_t debugger_id = 0;
+  // Reject anything left over after the id so a malformed specifier (for
+  // example a target uri like 'lldb-mcp://debugger/1/target/0') is not silently
+  // truncated to the debugger id.
+  if (specifier.consumeInteger(10, debugger_id) || !specifier.empty())
+    return createStringError(
+        formatv("malformed debugger specifier {0}", original));
+  return debugger_id;
+}
+
 /// Helper function to create a CallToolResult from a string output.
 static lldb_protocol::mcp::CallToolResult
 createTextResult(std::string output, bool is_error = false) {
@@ -69,14 +97,12 @@ CommandTool::Call(const lldb_protocol::mcp::ToolArguments &args) {
   lldb::DebuggerSP debugger_sp;
 
   if (!arguments.debugger.empty()) {
-    llvm::StringRef debugger_specifier = arguments.debugger;
-    debugger_specifier.consume_front(kSchemeAndHost);
-    uint32_t debugger_id = 0;
-    if (debugger_specifier.consumeInteger(10, debugger_id))
-      return createStringError(
-          formatv("malformed debugger specifier {0}", arguments.debugger));
+    llvm::Expected<lldb::user_id_t> debugger_id =
+        parseDebuggerID(arguments.debugger);
+    if (!debugger_id)
+      return debugger_id.takeError();
 
-    debugger_sp = Debugger::FindDebuggerWithID(debugger_id);
+    debugger_sp = Debugger::FindDebuggerWithID(*debugger_id);
   } else {
     for (size_t i = 0; i < Debugger::GetNumDebuggers(); i++) {
       debugger_sp = Debugger::GetDebuggerAtIndex(i);
@@ -146,4 +172,69 @@ DebuggerListTool::Call(const lldb_protocol::mcp::ToolArguments &args) {
   }
 
   return createTextResult(output);
+}
+
+DebuggerCreateTool::DebuggerCreateTool(std::string name,
+                                       std::string description,
+                                       std::shared_ptr<DebuggerManager> manager)
+    : Tool(std::move(name), std::move(description)),
+      m_debugger_manager(std::move(manager)) {}
+
+Expected<lldb_protocol::mcp::CallToolResult>
+DebuggerCreateTool::Call(const lldb_protocol::mcp::ToolArguments &args) {
+  Expected<DebuggerSP> debugger_sp = m_debugger_manager->CreateDebugger();
+  if (!debugger_sp)
+    return debugger_sp.takeError();
+
+  return createTextResult(to_uri(*debugger_sp));
+}
+
+DebuggerDeleteTool::DebuggerDeleteTool(std::string name,
+                                       std::string description,
+                                       std::shared_ptr<DebuggerManager> manager)
+    : Tool(std::move(name), std::move(description)),
+      m_debugger_manager(std::move(manager)) {}
+
+Expected<lldb_protocol::mcp::CallToolResult>
+DebuggerDeleteTool::Call(const lldb_protocol::mcp::ToolArguments &args) {
+  if (!std::holds_alternative<json::Value>(args))
+    return createStringError("DebuggerDeleteTool requires arguments");
+
+  json::Path::Root root;
+
+  DebuggerDeleteToolArguments arguments;
+  if (!fromJSON(std::get<json::Value>(args), arguments, root))
+    return root.getError();
+
+  if (arguments.debugger.empty())
+    return createStringError("no debugger specified");
+
+  llvm::Expected<lldb::user_id_t> debugger_id =
+      parseDebuggerID(arguments.debugger);
+  if (!debugger_id)
+    return debugger_id.takeError();
+
+  // Report a failed deletion (an unknown or non-MCP debugger) as a tool error
+  // the model can see and reason about (isError), not a JSON-RPC protocol
+  // error. This deliberately differs from CommandTool, which raises a protocol
+  // error for a missing debugger: targeting the wrong id on delete is a normal
+  // outcome the agent should recover from rather than a malformed request.
+  if (llvm::Error error = m_debugger_manager->DestroyDebugger(*debugger_id))
+    return createTextResult(llvm::toString(std::move(error)),
+                            /*is_error=*/true);
+
+  return createTextResult(formatv("deleted debugger {0}", *debugger_id).str());
+}
+
+std::optional<json::Value> DebuggerDeleteTool::GetSchema() const {
+  using namespace llvm::json;
+  Object properties{
+      {"debugger",
+       Object{{"type", "string"},
+              {"description", "The debugger ID or URI of the MCP-created debug "
+                              "session to delete."}}}};
+  Object schema{{"type", "object"},
+                {"properties", std::move(properties)},
+                {"required", Array{"debugger"}}};
+  return schema;
 }

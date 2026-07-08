@@ -13,9 +13,12 @@
 #include "lldb/Protocol/MCP/Tool.h"
 #include "llvm/Support/Error.h"
 #include "llvm/Support/JSON.h"
+#include <memory>
 #include <optional>
 
 namespace lldb_private::mcp {
+
+class DebuggerManager;
 
 class CommandTool : public lldb_protocol::mcp::Tool {
 public:
@@ -35,6 +38,34 @@ public:
 
   llvm::Expected<lldb_protocol::mcp::CallToolResult>
   Call(const lldb_protocol::mcp::ToolArguments &args) override;
+};
+
+class DebuggerCreateTool : public lldb_protocol::mcp::Tool {
+public:
+  DebuggerCreateTool(std::string name, std::string description,
+                     std::shared_ptr<DebuggerManager> manager);
+  ~DebuggerCreateTool() = default;
+
+  llvm::Expected<lldb_protocol::mcp::CallToolResult>
+  Call(const lldb_protocol::mcp::ToolArguments &args) override;
+
+private:
+  std::shared_ptr<DebuggerManager> m_debugger_manager;
+};
+
+class DebuggerDeleteTool : public lldb_protocol::mcp::Tool {
+public:
+  DebuggerDeleteTool(std::string name, std::string description,
+                     std::shared_ptr<DebuggerManager> manager);
+  ~DebuggerDeleteTool() = default;
+
+  llvm::Expected<lldb_protocol::mcp::CallToolResult>
+  Call(const lldb_protocol::mcp::ToolArguments &args) override;
+
+  std::optional<llvm::json::Value> GetSchema() const override;
+
+private:
+  std::shared_ptr<DebuggerManager> m_debugger_manager;
 };
 
 } // namespace lldb_private::mcp

@@ -23,6 +23,8 @@
 
 namespace lldb_private::mcp {
 
+class DebuggerManager;
+
 class ProtocolServerMCP : public ProtocolServer {
 
   using ServerUP = std::unique_ptr<lldb_protocol::mcp::Server>;
@@ -68,6 +70,12 @@ private:
 
   ServerUP m_server;
   lldb_protocol::mcp::ServerInfoHandle m_server_info_handle;
+
+  /// Tracks the debuggers created through MCP so they can be torn down without
+  /// affecting debuggers that already existed in the process. Held by
+  /// shared_ptr and shared with the create/delete tools so their lifetime does
+  /// not depend on member-destruction order relative to m_server.
+  std::shared_ptr<DebuggerManager> m_debugger_manager;
 };
 
 } // namespace lldb_private::mcp

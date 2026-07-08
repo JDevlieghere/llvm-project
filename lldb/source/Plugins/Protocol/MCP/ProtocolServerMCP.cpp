@@ -7,6 +7,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "ProtocolServerMCP.h"
+#include "DebuggerManager.h"
 #include "Resource.h"
 #include "Tool.h"
 #include "lldb/Core/PluginManager.h"
@@ -28,7 +29,9 @@ LLDB_PLUGIN_DEFINE(ProtocolServerMCP)
 static constexpr llvm::StringLiteral kName = "lldb-mcp";
 static constexpr llvm::StringLiteral kVersion = "0.1.0";
 
-ProtocolServerMCP::ProtocolServerMCP() : ProtocolServer() {}
+ProtocolServerMCP::ProtocolServerMCP()
+    : ProtocolServer(),
+      m_debugger_manager(std::make_shared<DebuggerManager>()) {}
 
 ProtocolServerMCP::~ProtocolServerMCP() { llvm::consumeError(Stop()); }
 
@@ -56,6 +59,13 @@ void ProtocolServerMCP::Extend(lldb_protocol::mcp::Server &server) const {
       std::make_unique<CommandTool>("command", "Run an lldb command."));
   server.AddTool(std::make_unique<DebuggerListTool>(
       "debugger_list", "List debugger instances with their debugger_id."));
+  server.AddTool(std::make_unique<DebuggerCreateTool>(
+      "debugger_create", "Create a new debugger instance.",
+      m_debugger_manager));
+  server.AddTool(std::make_unique<DebuggerDeleteTool>(
+      "debugger_delete",
+      "Delete a debugger instance previously created via MCP.",
+      m_debugger_manager));
   server.AddResourceProvider(std::make_unique<DebuggerResourceProvider>());
 }
 
@@ -144,6 +154,10 @@ llvm::Error ProtocolServerMCP::Stop() {
   m_server.reset(nullptr);
   m_server_info_handle.Remove();
   m_listener.reset();
+
+  // Tear down any debuggers created through MCP so the host process is not left
+  // with orphaned sessions. Debuggers that already existed are untouched.
+  m_debugger_manager->DestroyAll();
 
   return llvm::Error::success();
 }

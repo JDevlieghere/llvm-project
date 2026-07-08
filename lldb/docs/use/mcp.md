@@ -74,12 +74,18 @@ Configuration example (`mcp.json`) for [Visual Studio Code](https://code.visuals
 Tools are a primitive in the Model Context Protocol that enable servers to
 expose functionality to clients.
 
-LLDB's MCP integration exposes one tool, named `lldb_command` which allows the
-model to run the same commands a user would type in the LLDB command
-interpreter. It takes two arguments:
+LLDB's MCP integration exposes the following tools:
 
-1. The unique debugger ID as a number.
-2. The command and its arguments as a string.
+- `command` runs an LLDB command, just as a user would type it in the command
+  interpreter. It takes the command and its arguments as a string and,
+  optionally, the debugger ID or URI of the session to run it in. When no
+  debugger is specified, the first one is used.
+- `debugger_list` lists the active debugger instances and their URIs.
+- `debugger_create` creates a new debugger instance and returns its URI. This
+  lets an agent provision its own debug session, which is especially useful when
+  `lldb-mcp` launched LLDB on its behalf.
+- `debugger_delete` deletes a debugger instance. To protect a user's own
+  sessions, only debuggers created through `debugger_create` can be deleted.
 
 ## Resources
 
